@@ -1,175 +1,176 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
 
 const app = express();
-const server = http.createServer(app);
+app.use(express.json());
+app.use(cors());
 
-// Connect to MongoDB Atlas (Declared only once)
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://pranam23bh_db_user:IHkaQVXabMVeJkLh@cluster0.abvtgnr.mongodb.net/?appName=Cluster0";
-
+// 1. Connect to MongoDB (Replace with your own MongoDB Atlas connection string)
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/greenlight';
 mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ Connected to MongoDB Atlas successfully!'))
+  .then(() => console.log('🟢 Connected to MongoDB Database'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
-// Database Schema for Game History
-const RoundSchema = new mongoose.Schema({
-  roundId: Number,
-  winner: String,
-  timestamp: { type: Date, default: Date.now }
-});
-const RoundModel = mongoose.model('Round', RoundSchema);
-
-app.use(express.static(path.join(__dirname, 'public')));
-
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+// 2. Define User Schema with all security constraints & ₹0 balances
+const userSchema = new mongoose.Schema({
+  phoneNumber: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  userCode: { type: String, required: true, unique: true },
+  isApproved: { type: Boolean, default: false }, // Requires admin approval before login
+  totalBalance: { type: Number, default: 0 },
+  depositBalance: { type: Number, default: 0 },
+  bonusBalance: { type: Number, default: 0 },
+  winBalance: { type: Number, default: 0 },
+  registrationIp: { type: String, required: true } // Tracks IP address for 1-account-per-IP rule
 });
 
-let gameState = {
-  roundId: 100001,
-  timeLeft: 15,
-  phase: 'BETTING',
-  totalBets: { GREEN: 0, WHITE: 0, RED: 0 },
-  history: ['GREEN', 'RED', 'GREEN', 'WHITE', 'RED'],
-  adminOverride: 'AUTO'
-};
+const User = mongoose.model('User', userSchema);
 
-let onlineCount = 0;
-let metrics = {
-  totalUsers: 142,
-  totalDeposits: 54800,
-  totalWithdraws: 19200
-};
+// JWT Secret Key
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
 
-app.get('/', (req, res) => {
-  res.send(`
-    <div style="font-family: Arial, sans-serif; text-align: center; padding-top: 50px; background: #070a12; color: #fff;">
-      <h1>🚀 Connected to MongoDB Database & Live!</h1>
-      <p><a href="/admin" style="color: #34d399; font-weight: bold;">Go to Admin Panel ➔</a></p>
-    </div>
-  `);
-});
+// ==========================================
+// ROUTE: REGISTER NEW ACCOUNT
+// ==========================================
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { phoneNumber, password } = req.body;
 
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
-app.get('/api/admin/metrics', (req, res) => {
-  res.json(metrics);
-});
-
-// Master Game Loop with Database Saving
-setInterval(async () => {
-  gameState.timeLeft--;
-
-  if (gameState.timeLeft <= 5 && gameState.phase === 'BETTING') {
-    gameState.phase = 'CLOSED';
-  }
-
-  if (gameState.timeLeft <= 0) {
-    let winner;
-    if (gameState.adminOverride && gameState.adminOverride !== 'AUTO') {
-      winner = gameState.adminOverride;
-    } else {
-      const colors = ['GREEN', 'RED', 'WHITE', 'GREEN', 'RED'];
-      winner = colors[Math.floor(Math.random() * colors.length)];
-    }
-    
-    gameState.history.push(winner);
-    if (gameState.history.length > 30) gameState.history.shift();
-
-    // Save round result permanently to MongoDB Atlas
-    try {
-      await RoundModel.create({ roundId: gameState.roundId, winner: winner });
-      console.log(`Round #${gameState.roundId} saved to MongoDB! Winner: ${winner}`);
-    } catch (dbErr) {
-      console.error('Failed to save round to DB:', dbErr);
-    }
-
-    io.emit('round_result', {
-      winner: winner,
-      history: gameState.history
-    });
-
-    gameState.roundId++;
-    gameState.timeLeft = 15;
-    gameState.phase = 'BETTING';
-    gameState.totalBets = { GREEN: 0, WHITE: 0, RED: 0 };
-  }
-
-  io.emit('master_tick', {
-    roundId: gameState.roundId,
-    timeLeft: gameState.timeLeft,
-    phase: gameState.phase,
-    totalBets: gameState.totalBets,
-    onlineCount: onlineCount,
-    adminOverride: gameState.adminOverride
-  });
-}, 1000);
-
-// Simulated Bot Bets
-setInterval(() => {
-  if (gameState.phase === 'BETTING') {
-    const botNames = ["Aarav Sharma", "Priya Patel", "Rahul Verma", "Ananya Singh", "Vikram Malhotra"];
-    const colors = ['GREEN', 'RED', 'WHITE'];
-    const randomName = botNames[Math.floor(Math.random() * botNames.length)];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    const randomAmount = [10, 50, 100, 500][Math.floor(Math.random() * 4)];
-
-    gameState.totalBets[randomColor] += randomAmount;
-
-    io.emit('bot_bet', {
-      name: randomName,
-      color: randomColor,
-      amount: randomAmount
-    });
-  }
-}, 2000);
-
-io.on('connection', (socket) => {
-  onlineCount++;
-  console.log('User connected:', socket.id, '| Online:', onlineCount);
-
-  socket.emit('init_sync', {
-    onlineCount: onlineCount,
-    gameState: gameState
-  });
-
-  socket.on('admin_set_override', (mode) => {
-    if (['AUTO', 'GREEN', 'WHITE', 'RED'].includes(mode)) {
-      gameState.adminOverride = mode;
-      io.emit('master_tick', {
-        roundId: gameState.roundId,
-        timeLeft: gameState.timeLeft,
-        phase: gameState.phase,
-        totalBets: gameState.totalBets,
-        onlineCount: onlineCount,
-        adminOverride: gameState.adminOverride
+    // Rule 1: Strict 10-digit phone verification
+    const phoneRegex = /^\d{10}$/;
+    if (!phoneRegex.test(phoneNumber)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Phone number must be a real, exact 10-digit number.' 
       });
     }
-  });
 
-  socket.on('place_bet', (data) => {
-    if (gameState.phase === 'BETTING') {
-      if (gameState.totalBets[data.color] !== undefined) {
-        gameState.totalBets[data.color] += data.amount;
-      }
+    // Rule 2: Check IP Address Restriction (1 account per IP address)
+    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
+
+    const existingIpUser = await User.findOne({ registrationIp: clientIp });
+    if (existingIpUser) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Registration Blocked: Only one account can be registered from this IP address.' 
+      });
     }
-  });
 
-  socket.on('disconnect', () => {
-    onlineCount = Math.max(0, onlineCount - 1);
-    console.log('User disconnected:', socket.id, '| Online:', onlineCount);
-  });
+    // Rule 3: Check if phone number is already registered (Only 1 account per phone)
+    const existingPhoneUser = await User.findOne({ phoneNumber });
+    if (existingPhoneUser) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'This phone number is already registered.' 
+      });
+    }
+
+    // Rule 4: Auto-Generate Unique Backend ID (USR-XXXXXX)
+    const randomNum = Math.floor(100000 + Math.random() * 900000);
+    const userCode = `USR-${randomNum}`;
+
+    // Rule 5: Hash password securely
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Rule 6: Save user with ₹0 balances and pending approval status
+    const newUser = new User({
+      phoneNumber,
+      password: hashedPassword,
+      userCode,
+      isApproved: false,       // Must be approved by admin before login
+      totalBalance: 0,
+      depositBalance: 0,
+      bonusBalance: 0,
+      winBalance: 0,
+      registrationIp: clientIp
+    });
+
+    await newUser.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Account registered successfully. Pending admin approval.',
+      userCode: userCode
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error during registration.' });
+  }
 });
 
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`Master Game Server running on port ${PORT}`);
+// ==========================================
+// ROUTE: LOGIN EXISTING USER
+// ==========================================
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { phoneNumber, password } = req.body;
+
+    // Find user by phone number
+    const user = await User.findOne({ phoneNumber });
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid phone number or password.' });
+    }
+
+    // Check if account is approved by admin
+    if (!user.isApproved) {
+      return res.status(403).json({ success: false, message: 'Account is pending admin approval. Please wait.' });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: 'Invalid phone number or password.' });
+    }
+
+    // Generate JWT Token valid for 7 days
+    const token = jwt.sign({ userId: user._id, userCode: user.userCode }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(200).json({
+      success: true,
+      token,
+      message: 'Login successful'
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error during login.' });
+  }
 });
+
+// ==========================================
+// ROUTE: FETCH USER PROFILE & BALANCES (Protected)
+// ==========================================
+app.get('/api/user/profile', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ message: 'No token provided' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const user = await User.findById(decoded.userId).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.status(200).json({
+      phoneNumber: user.phoneNumber,
+      userCode: user.userCode,
+      totalBalance: user.totalBalance,
+      depositBalance: user.depositBalance,
+      bonusBalance: user.bonusBalance,
+      winBalance: user.winBalance,
+      isApproved: user.isApproved
+    });
+
+  } catch (err) {
+    res.status(401).json({ message: 'Invalid or expired token' });
+  }
+});
+
+// Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Backend server running on port ${PORT}`));
