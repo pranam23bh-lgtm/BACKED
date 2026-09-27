@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,6 +23,9 @@ const io = new Server(server, {
 
 app.use(express.json());
 app.use(cors());
+
+// Serve static frontend files from the 'public' folder (Fixes Cannot GET /)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // 1. Connect to MongoDB Atlas
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/greenlight';
