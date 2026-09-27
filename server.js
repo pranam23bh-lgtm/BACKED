@@ -51,26 +51,29 @@ const User = mongoose.model('User', userSchema);
 // JWT Secret Key
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
 
-// Game State Variables & Timer (Matching Frontend Expectations)
+// Game State Variables & Timer
 let currentRoundId = 100334;
 let adminOverride = 'AUTO';
 let onlineUsers = 0;
 let timeRemaining = 30;
 let currentOutcome = 'GREEN';
-let gameHistory = ['GREEN', 'RED', 'WHITE', 'GREEN']; // Initial dummy history
+let gameHistory = ['GREEN', 'RED', 'WHITE', 'GREEN']; 
 
 // Socket.io Real-Time Connection
 io.on('connection', (socket) => {
   onlineUsers++;
   console.log(`User connected: ${socket.id} | Online: ${onlineUsers}`);
 
-  // Send current history immediately upon connection so frontend history renders
+  // Send current history and override state immediately upon connection
   socket.emit('round_result', { history: gameHistory });
+  socket.emit('admin_override_update', { adminOverride });
 
   socket.on('admin_set_override', (mode) => {
     if (['AUTO', 'GREEN', 'WHITE', 'RED'].includes(mode)) {
       adminOverride = mode;
       console.log(`⚡ Admin set override to: ${adminOverride}`);
+      // Broadcast override change to all connected admin and client dashboards
+      io.emit('admin_override_update', { adminOverride });
     }
   });
 
@@ -80,11 +83,11 @@ io.on('connection', (socket) => {
   });
 });
 
-// Dynamic Game Tick Loop (Emits timeLeft, phase, and round_result events)
+// Dynamic Game Tick Loop
 setInterval(() => {
   timeRemaining--;
 
-  let phase = timeRemaining <= 15 ? 'CLOSED' : 'BETTING'; // Matches frontend (0-15s / closed)
+  let phase = timeRemaining <= 15 ? 'CLOSED' : 'BETTING';
 
   if (timeRemaining <= 0) {
     if (adminOverride !== 'AUTO') {
@@ -94,11 +97,9 @@ setInterval(() => {
       currentOutcome = colors[Math.floor(Math.random() * colors.length)];
     }
 
-    // Add to history array for frontend history-container
     gameHistory.unshift(currentOutcome);
     if (gameHistory.length > 10) gameHistory.pop();
 
-    // Broadcast round result so frontend updates history list
     io.emit('round_result', {
       roundId: currentRoundId,
       outcome: currentOutcome,
@@ -110,7 +111,7 @@ setInterval(() => {
     phase = 'BETTING';
   }
 
-  // Emitting exact property names your frontend looks for (timeLeft, phase)
+  // Emitting adminOverride alongside timer data so the admin panel displays it correctly
   io.emit('master_tick', {
     roundId: currentRoundId,
     timeLeft: timeRemaining,
@@ -120,6 +121,7 @@ setInterval(() => {
     status: phase,
     outcome: currentOutcome,
     color: currentOutcome,
+    adminOverride: adminOverride,
     onlineUsers: onlineUsers
   });
 }, 1000);
@@ -225,7 +227,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ==========================================
-// ROUTE: FETCH USER PROFILE & BALANCES (Protected)
+// ROUTE: FETCH USER PROFILE & BALANCES
 // ==========================================
 app.get('/api/user/profile', async (req, res) => {
   try {
@@ -269,6 +271,15 @@ app.get('/api/admin/metrics', async (req, res) => {
   }
 });
 
+app.get('/api/admin/status', (req, res) => {
+  res.status(200).json({
+    success: true,
+    adminOverride,
+    currentRoundId,
+    onlineUsers
+  });
+});
+
 app.get('/api/admin/users', async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ _id: -1 });
@@ -282,7 +293,7 @@ app.post('/api/admin/approve-user/:id', async (req, res) => {
   try {
     const userId = req.params.id;
     const user = await User.findByIdAndUpdate(userId, { isApproved: true }, { new: true });
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!user) return res.status(404).json({ success: false, message: 'Server error: User not found' });
     
     res.status(200).json({ success: true, message: `User ${user.userCode} approved!` });
   } catch (err) {
