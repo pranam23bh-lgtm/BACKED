@@ -24,7 +24,7 @@
       <div>
         <h1 class="text-base font-extrabold text-white tracking-wide">ADMIN CONTROL CENTER</h1>
         <div class="text-xs text-amber-400 font-semibold flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> Live Netlify Engine Sync
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> Live Server Sync
         </div>
       </div>
     </div>
@@ -64,8 +64,31 @@
     <div class="text-xs text-gray-400">Current Forced Result: <span id="activeOverrideText" class="font-bold text-amber-400">AUTO</span></div>
   </div>
 
+  <!-- USER APPROVALS & MANAGEMENT -->
+  <div class="glass p-5 rounded-2xl space-y-4 border border-blue-500/30">
+    <h2 class="text-sm font-extrabold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+      <i class="fa-solid fa-users-gear"></i> User Registration Approvals
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-gray-300">
+        <thead class="bg-gray-800 uppercase text-gray-400 font-bold">
+          <tr>
+            <th class="p-3 rounded-l-xl">User ID</th>
+            <th class="p-3">Phone Number</th>
+            <th class="p-3">Registration IP</th>
+            <th class="p-3">Status</th>
+            <th class="p-3 rounded-r-xl text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody" class="divide-y divide-gray-800">
+          <tr><td colspan="5" class="p-4 text-center text-gray-500">Loading users...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <script>
-    const socket = io(); // Connects to origin Render server
+    const socket = io(); // Connects to Render backend
 
     socket.on('master_tick', (data) => {
       document.getElementById('adminRoundId').innerText = `#${data.roundId}`;
@@ -93,12 +116,86 @@
         const res = await fetch('/api/admin/metrics');
         const data = await res.json();
         document.getElementById('statUsers').innerText = data.totalUsers;
-        document.getElementById('statDeposits').innerText = `₹${parseFloat(data.totalDeposits).toLocaleString('en-IN')}`;
-        document.getElementById('statWithdraws').innerText = `₹${parseFloat(data.totalWithdraws).toLocaleString('en-IN')}`;
+        document.getElementById('statDeposits').innerText = `₹${parseFloat(data.totalDeposits || 0).toLocaleString('en-IN')}`;
+        document.getElementById('statWithdraws').innerText = `₹${parseFloat(data.totalWithdraws || 0).toLocaleString('en-IN')}`;
       } catch (err) {}
     }
+
+    async function fetchUsers() {
+      try {
+        const res = await fetch('/api/admin/users');
+        const data = await res.json();
+        if (data.success) {
+          const tbody = document.getElementById('userTableBody');
+          tbody.innerHTML = '';
+          
+          if (data.users.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No registered users found.</td></tr>`;
+            return;
+          }
+
+          data.users.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td class="p-3 font-mono font-bold text-white">${u.userCode}</td>
+              <td class="p-3">${u.phoneNumber}</td>
+              <td class="p-3 text-gray-400 font-mono">${u.registrationIp || 'N/A'}</td>
+              <td class="p-3">
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold ${u.isApproved ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}">
+                  ${u.isApproved ? 'APPROVED' : 'PENDING'}
+                </span>
+              </td>
+              <td class="p-3 text-right space-x-2">
+                ${!u.isApproved ? `<button onclick="approveUser('${u._id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg font-bold text-[10px] transition">Approve</button>` : ''}
+                <button onclick="deleteUser('${u._id}')" class="bg-red-600/80 hover:bg-red-500 text-white px-3 py-1 rounded-lg font-bold text-[10px] transition">Delete</button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch users', err);
+      }
+    }
+
+    async function approveUser(id) {
+      try {
+        const res = await fetch(`/api/admin/approve-user/${id}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          fetchUsers();
+          fetchMetrics();
+        } else {
+          alert(data.message);
+        }
+      } catch (err) {
+        alert('Error approving user');
+      }
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('Are you sure you want to delete this user?')) return;
+      try {
+        const res = await fetch(`/api/admin/user/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          fetchUsers();
+          fetchMetrics();
+        } else {
+          alert(data.message);
+        }
+      } catch (err) {
+        alert('Error deleting user');
+      }
+    }
+
+    // Initial loads & polling
     fetchMetrics();
-    setInterval(fetchMetrics, 5000);
+    fetchUsers();
+    setInterval(() => {
+      fetchMetrics();
+      fetchUsers();
+    }, 5000);
   </script>
 </body>
 </html>

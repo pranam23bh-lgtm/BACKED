@@ -177,6 +177,45 @@ app.get('/api/user/profile', async (req, res) => {
     res.status(401).json({ message: 'Invalid or expired token' });
   }
 });
+// ==========================================
+// ADMIN ROUTE: FETCH ALL USERS
+// ==========================================
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const users = await User.find().select('-password').sort({ _id: -1 });
+    res.status(200).json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error fetching users' });
+  }
+});
+
+// ==========================================
+// ADMIN ROUTE: APPROVE USER ACCOUNT
+// ==========================================
+app.post('/api/admin/approve-user/:id', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findByIdAndUpdate(userId, { isApproved: true }, { new: true });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    res.status(200).json({ success: true, message: `User ${user.userCode} approved!` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error approving user' });
+  }
+});
+
+// ==========================================
+// ADMIN ROUTE: DELETE/REJECT USER
+// ==========================================
+app.delete('/api/admin/user/:id', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    await User.findByIdAndDelete(userId);
+    res.status(200).json({ success: true, message: 'User deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error deleting user' });
+  }
+});
 
 // Start Server
 const PORT = process.env.PORT || 5000;
