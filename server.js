@@ -5,23 +5,31 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" }
+});
+
 app.use(express.json());
 app.use(cors());
 
-// 1. Connect to MongoDB (Replace with your own MongoDB Atlas connection string)
+// 1. Connect to MongoDB Atlas
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/greenlight';
 mongoose.connect(MONGO_URI)
   .then(() => console.log('🟢 Connected to MongoDB Database'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
-// 2. Define User Schema with all security constraints & ₹0 balances
+// 2. Define User Schema with security constraints & ₹0 balances
 const userSchema = new mongoose.Schema({
   phoneNumber: { type: String, required: true, unique: true },
   password: { type: String, required: true },
@@ -38,6 +46,38 @@ const User = mongoose.model('User', userSchema);
 
 // JWT Secret Key
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
+
+// Game State Variables
+let currentRoundId = 100334;
+let adminOverride = 'AUTO';
+let onlineUsers = 0;
+
+// Socket.io Real-Time Connection
+io.on('connection', (socket) => {
+  onlineUsers++;
+  console.log(`User connected: ${socket.id} | Online: ${onlineUsers}`);
+
+  socket.on('admin_set_override', (mode) => {
+    if (['AUTO', 'GREEN', 'WHITE', 'RED'].includes(mode)) {
+      adminOverride = mode;
+      console.log(`⚡ Admin set override to: ${adminOverride}`);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    onlineUsers--;
+    console.log(`User disconnected: ${socket.id} | Online: ${onlineUsers}`);
+  });
+});
+
+// Dynamic Game Tick Loop (Emits to frontends & admin panel every second)
+setInterval(() => {
+  io.emit('master_tick', {
+    roundId: currentRoundId,
+    adminOverride: adminOverride,
+    onlineUsers: onlineUsers
+  });
+}, 1000);
 
 // ==========================================
 // ROUTE: REGISTER NEW ACCOUNT
@@ -66,7 +106,7 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // Rule 3: Check if phone number is already registered (Only 1 account per phone)
+    // Rule 3: Check if phone number is already registered
     const existingPhoneUser = await User.findOne({ phoneNumber });
     if (existingPhoneUser) {
       return res.status(400).json({ 
@@ -88,7 +128,7 @@ app.post('/api/auth/register', async (req, res) => {
       phoneNumber,
       password: hashedPassword,
       userCode,
-      isApproved: false,       // Must be approved by admin before login
+      isApproved: false,
       totalBalance: 0,
       depositBalance: 0,
       bonusBalance: 0,
@@ -117,24 +157,20 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { phoneNumber, password } = req.body;
 
-    // Find user by phone number
     const user = await User.findOne({ phoneNumber });
     if (!user) {
       return res.status(400).json({ success: false, message: 'Invalid phone number or password.' });
     }
 
-    // Check if account is approved by admin
     if (!user.isApproved) {
       return res.status(403).json({ success: false, message: 'Account is pending admin approval. Please wait.' });
     }
 
-    // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ success: false, message: 'Invalid phone number or password.' });
     }
 
-    // Generate JWT Token valid for 7 days
     const token = jwt.sign({ userId: user._id, userCode: user.userCode }, JWT_SECRET, { expiresIn: '7d' });
 
     res.status(200).json({
@@ -177,9 +213,26 @@ app.get('/api/user/profile', async (req, res) => {
     res.status(401).json({ message: 'Invalid or expired token' });
   }
 });
+
 // ==========================================
-// ADMIN ROUTE: FETCH ALL USERS
+// ADMIN ROUTES
 // ==========================================
+
+// Fetch Admin Metrics (Total Users, Deposits, Withdrawals)
+app.get('/api/admin/metrics', async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    res.status(200).json({
+      totalUsers,
+      totalDeposits: 0,
+      totalWithdraws: 0
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error fetching metrics' });
+  }
+});
+
+// Fetch All Users for Approval Table
 app.get('/api/admin/users', async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ _id: -1 });
@@ -189,9 +242,7 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
-// ==========================================
-// ADMIN ROUTE: APPROVE USER ACCOUNT
-// ==========================================
+// Approve User Account
 app.post('/api/admin/approve-user/:id', async (req, res) => {
   try {
     const userId = req.params.id;
@@ -204,9 +255,7 @@ app.post('/api/admin/approve-user/:id', async (req, res) => {
   }
 });
 
-// ==========================================
-// ADMIN ROUTE: DELETE/REJECT USER
-// ==========================================
+// Delete/Reject User
 app.delete('/api/admin/user/:id', async (req, res) => {
   try {
     const userId = req.params.id;
@@ -217,6 +266,6 @@ app.delete('/api/admin/user/:id', async (req, res) => {
   }
 });
 
-// Start Server
+// Start Server with HTTP & Socket.io Integration
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Backend server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Backend server running on port ${PORT}`));
