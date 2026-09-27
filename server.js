@@ -1,13 +1,27 @@
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://pranam23bh_db_user:IHkaQVXabMVeJkLh@cluster0.abvtgnr.mongodb.net/?appName=Cluster0";
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
 
-// Serve all static assets inside the 'public' folder
+// Connect to MongoDB Atlas (Declared only once)
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://pranam23bh_db_user:IHkaQVXabMVeJkLh@cluster0.abvtgnr.mongodb.net/?appName=Cluster0";
+
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ Connected to MongoDB Atlas successfully!'))
+  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+
+// Database Schema for Game History
+const RoundSchema = new mongoose.Schema({
+  roundId: Number,
+  winner: String,
+  timestamp: { type: Date, default: Date.now }
+});
+const RoundModel = mongoose.model('Round', RoundSchema);
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const io = new Server(server, {
@@ -17,7 +31,6 @@ const io = new Server(server, {
   }
 });
 
-// Game State
 let gameState = {
   roundId: 100001,
   timeLeft: 15,
@@ -34,28 +47,25 @@ let metrics = {
   totalWithdraws: 19200
 };
 
-// Public Landing Page
 app.get('/', (req, res) => {
   res.send(`
     <div style="font-family: Arial, sans-serif; text-align: center; padding-top: 50px; background: #070a12; color: #fff;">
-      <h1>🚀 Red Light Green Light Backend is Live & Online!</h1>
+      <h1>🚀 Connected to MongoDB Database & Live!</h1>
       <p><a href="/admin" style="color: #34d399; font-weight: bold;">Go to Admin Panel ➔</a></p>
     </div>
   `);
 });
 
-// Serve admin.html from inside the public folder
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Admin Metrics API
 app.get('/api/admin/metrics', (req, res) => {
   res.json(metrics);
 });
 
-// Master Game Loop
-setInterval(() => {
+// Master Game Loop with Database Saving
+setInterval(async () => {
   gameState.timeLeft--;
 
   if (gameState.timeLeft <= 5 && gameState.phase === 'BETTING') {
@@ -73,6 +83,14 @@ setInterval(() => {
     
     gameState.history.push(winner);
     if (gameState.history.length > 30) gameState.history.shift();
+
+    // Save round result permanently to MongoDB Atlas
+    try {
+      await RoundModel.create({ roundId: gameState.roundId, winner: winner });
+      console.log(`Round #${gameState.roundId} saved to MongoDB! Winner: ${winner}`);
+    } catch (dbErr) {
+      console.error('Failed to save round to DB:', dbErr);
+    }
 
     io.emit('round_result', {
       winner: winner,
@@ -126,7 +144,6 @@ io.on('connection', (socket) => {
   socket.on('admin_set_override', (mode) => {
     if (['AUTO', 'GREEN', 'WHITE', 'RED'].includes(mode)) {
       gameState.adminOverride = mode;
-      console.log('Admin changed override mode to:', mode);
       io.emit('master_tick', {
         roundId: gameState.roundId,
         timeLeft: gameState.timeLeft,
@@ -156,4 +173,3 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`Master Game Server running on port ${PORT}`);
 });
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://pranam23bh_db_user:IHkaQVXabMVeJkLh@cluster0.XXXXX.mongodb.net/?retryWrites=true&w=majority";
