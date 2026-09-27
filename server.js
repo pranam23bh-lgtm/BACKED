@@ -271,5 +271,12 @@ app.delete('/api/admin/user/:id', async (req, res) => {
 });
 
 // Start Server with HTTP & Socket.io Integration
-const PORT = process.env.PORT || 5000;
+
+// Root route to fix "Cannot GET /"
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Green Light Backend API is running successfully!'
+  });
+});const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Backend server running on port ${PORT}`));
