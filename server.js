@@ -1,3 +1,4 @@
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://pranam23bh_db_user:IHkaQVXabMVeJkLh@cluster0.abvtgnr.mongodb.net/?appName=Cluster0";
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
