@@ -155,3 +155,4 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`Master Game Server running on port ${PORT}`);
 });
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://pranam23bh_db_user:IHkaQVXabMVeJkLh@cluster0.XXXXX.mongodb.net/?retryWrites=true&w=majority";
