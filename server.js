@@ -274,10 +274,10 @@ app.delete('/api/admin/user/:id', async (req, res) => {
 
 // Root route to fix "Cannot GET /"
 // Root route to serve Admin Panel from public folder
+// Root route to serve Admin Panel from public folder
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
-});const PORT = process.env.PORT || 5000;
+
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Backend server running on port ${PORT}`));
-
-
