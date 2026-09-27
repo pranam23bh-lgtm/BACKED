@@ -5,6 +5,16 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
+// FIX: Add a landing route so visiting the Render URL doesn't show "Cannot GET /"
+app.get('/', (req, res) => {
+  res.send(`
+    <div style="font-family: Arial, sans-serif; text-align: center; padding-top: 50px; background: #070a12; color: #fff;">
+      <h1>🚀 Red Light Green Light Backend is Live & Online!</h1>
+      <p>Socket.io game server is actively running and ready for frontend connections.</p>
+    </div>
+  `);
+});
+
 const io = new Server(server, {
   cors: {
     origin: "*",
