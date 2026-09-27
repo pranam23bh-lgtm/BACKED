@@ -51,18 +51,21 @@ const User = mongoose.model('User', userSchema);
 // JWT Secret Key
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
 
-// Game State Variables & Timer
+// Game State Variables & Timer (Matching Frontend Expectations)
 let currentRoundId = 100334;
 let adminOverride = 'AUTO';
 let onlineUsers = 0;
-let gameStatus = 'BETTING';
 let timeRemaining = 30;
 let currentOutcome = 'GREEN';
+let gameHistory = ['GREEN', 'RED', 'WHITE', 'GREEN']; // Initial dummy history
 
 // Socket.io Real-Time Connection
 io.on('connection', (socket) => {
   onlineUsers++;
   console.log(`User connected: ${socket.id} | Online: ${onlineUsers}`);
+
+  // Send current history immediately upon connection so frontend history renders
+  socket.emit('round_result', { history: gameHistory });
 
   socket.on('admin_set_override', (mode) => {
     if (['AUTO', 'GREEN', 'WHITE', 'RED'].includes(mode)) {
@@ -77,13 +80,11 @@ io.on('connection', (socket) => {
   });
 });
 
-// Dynamic Game Tick Loop (Emits to frontends & admin panel every second)
+// Dynamic Game Tick Loop (Emits timeLeft, phase, and round_result events)
 setInterval(() => {
   timeRemaining--;
 
-  if (timeRemaining <= 5) {
-    gameStatus = 'CLOSED';
-  }
+  let phase = timeRemaining <= 15 ? 'CLOSED' : 'BETTING'; // Matches frontend (0-15s / closed)
 
   if (timeRemaining <= 0) {
     if (adminOverride !== 'AUTO') {
@@ -93,18 +94,33 @@ setInterval(() => {
       currentOutcome = colors[Math.floor(Math.random() * colors.length)];
     }
 
+    // Add to history array for frontend history-container
+    gameHistory.unshift(currentOutcome);
+    if (gameHistory.length > 10) gameHistory.pop();
+
+    // Broadcast round result so frontend updates history list
+    io.emit('round_result', {
+      roundId: currentRoundId,
+      outcome: currentOutcome,
+      history: gameHistory
+    });
+
     currentRoundId++;
     timeRemaining = 30;
-    gameStatus = 'BETTING';
+    phase = 'BETTING';
   }
 
+  // Emitting exact property names your frontend looks for (timeLeft, phase)
   io.emit('master_tick', {
     roundId: currentRoundId,
-    adminOverride: adminOverride,
-    onlineUsers: onlineUsers,
-    status: gameStatus,
-    timeRemaining: timeRemaining,
-    outcome: currentOutcome
+    timeLeft: timeRemaining,
+    timer: timeRemaining,
+    countdown: timeRemaining,
+    phase: phase,
+    status: phase,
+    outcome: currentOutcome,
+    color: currentOutcome,
+    onlineUsers: onlineUsers
   });
 }, 1000);
 
