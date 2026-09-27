@@ -273,11 +273,10 @@ app.delete('/api/admin/user/:id', async (req, res) => {
 // Start Server with HTTP & Socket.io Integration
 
 // Root route to fix "Cannot GET /"
+// Root route to serve Admin Panel from public folder
 app.get('/', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Green Light Backend API is running successfully!'
-  });
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 });const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Backend server running on port ${PORT}`));
 
