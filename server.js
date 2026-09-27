@@ -24,7 +24,7 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(cors());
 
-// Serve static frontend files from the 'public' folder (Fixes Cannot GET /)
+// Serve static frontend files from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
 // 1. Connect to MongoDB Atlas
@@ -51,10 +51,13 @@ const User = mongoose.model('User', userSchema);
 // JWT Secret Key
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
 
-// Game State Variables
+// Game State Variables & Timer
 let currentRoundId = 100334;
 let adminOverride = 'AUTO';
 let onlineUsers = 0;
+let gameStatus = 'BETTING';
+let timeRemaining = 30;
+let currentOutcome = 'GREEN';
 
 // Socket.io Real-Time Connection
 io.on('connection', (socket) => {
@@ -76,10 +79,32 @@ io.on('connection', (socket) => {
 
 // Dynamic Game Tick Loop (Emits to frontends & admin panel every second)
 setInterval(() => {
+  timeRemaining--;
+
+  if (timeRemaining <= 5) {
+    gameStatus = 'CLOSED';
+  }
+
+  if (timeRemaining <= 0) {
+    if (adminOverride !== 'AUTO') {
+      currentOutcome = adminOverride;
+    } else {
+      const colors = ['GREEN', 'RED', 'WHITE'];
+      currentOutcome = colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    currentRoundId++;
+    timeRemaining = 30;
+    gameStatus = 'BETTING';
+  }
+
   io.emit('master_tick', {
     roundId: currentRoundId,
     adminOverride: adminOverride,
-    onlineUsers: onlineUsers
+    onlineUsers: onlineUsers,
+    status: gameStatus,
+    timeRemaining: timeRemaining,
+    outcome: currentOutcome
   });
 }, 1000);
 
@@ -90,7 +115,6 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { phoneNumber, password } = req.body;
 
-    // Rule 1: Strict 10-digit phone verification
     const phoneRegex = /^\d{10}$/;
     if (!phoneRegex.test(phoneNumber)) {
       return res.status(400).json({ 
@@ -99,7 +123,6 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // Rule 2: Check IP Address Restriction (1 account per IP address)
     const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress;
 
     const existingIpUser = await User.findOne({ registrationIp: clientIp });
@@ -110,7 +133,6 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // Rule 3: Check if phone number is already registered
     const existingPhoneUser = await User.findOne({ phoneNumber });
     if (existingPhoneUser) {
       return res.status(400).json({ 
@@ -119,15 +141,12 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // Rule 4: Auto-Generate Unique Backend ID (USR-XXXXXX)
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     const userCode = `USR-${randomNum}`;
 
-    // Rule 5: Hash password securely
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Rule 6: Save user with ₹0 balances and pending approval status
     const newUser = new User({
       phoneNumber,
       password: hashedPassword,
@@ -221,8 +240,6 @@ app.get('/api/user/profile', async (req, res) => {
 // ==========================================
 // ADMIN ROUTES
 // ==========================================
-
-// Fetch Admin Metrics (Total Users, Deposits, Withdrawals)
 app.get('/api/admin/metrics', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
@@ -236,7 +253,6 @@ app.get('/api/admin/metrics', async (req, res) => {
   }
 });
 
-// Fetch All Users for Approval Table
 app.get('/api/admin/users', async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ _id: -1 });
@@ -246,7 +262,6 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
-// Approve User Account
 app.post('/api/admin/approve-user/:id', async (req, res) => {
   try {
     const userId = req.params.id;
@@ -259,7 +274,6 @@ app.post('/api/admin/approve-user/:id', async (req, res) => {
   }
 });
 
-// Delete/Reject User
 app.delete('/api/admin/user/:id', async (req, res) => {
   try {
     const userId = req.params.id;
@@ -270,14 +284,13 @@ app.delete('/api/admin/user/:id', async (req, res) => {
   }
 });
 
-// Start Server with HTTP & Socket.io Integration
-
-// Root route to fix "Cannot GET /"
-// Root route to serve Admin Panel from public folder
-// Root route to serve Admin Panel from public folder
+// ==========================================
+// ROOT ROUTE: SERVE ADMIN PANEL
+// ==========================================
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// Start Server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Backend server running on port ${PORT}`));
