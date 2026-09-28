@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Withdrawal Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #030712; color: #f3f4f6; }
+    .glass { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body class="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
+
+  <!-- TOP BAR -->
+  <header class="flex justify-between items-center bg-gray-900/80 p-4 rounded-2xl border border-gray-800">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 text-lg font-bold">
+        <i class="fa-solid fa-money-bill-transfer"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-extrabold text-white tracking-wide">WITHDRAWAL APPROVAL PANEL</h1>
+        <div class="text-xs text-red-400 font-semibold">Manage & Verify User Withdrawal Requests</div>
+      </div>
+    </div>
+    <a href="admin.html" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl font-bold transition border border-gray-700">
+      <i class="fa-solid fa-arrow-left mr-1"></i> Dashboard
+    </a>
+  </header>
+
+  <!-- PENDING WITHDRAWALS TABLE -->
+  <div class="glass p-5 rounded-2xl space-y-4 border border-red-500/30">
+    <div class="flex justify-between items-center">
+      <h2 class="text-sm font-extrabold text-red-400 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-clock-rotate-left"></i> Pending Withdrawals Queue
+      </h2>
+      <button onclick="fetchPendingWithdrawals()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700">
+        <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-gray-300">
+        <thead class="bg-gray-800 uppercase text-gray-400 font-bold">
+          <tr>
+            <th class="p-3 rounded-l-xl">User Info</th>
+            <th class="p-3">Amount</th>
+            <th class="p-3">Destination Details (UPI / Bank)</th>
+            <th class="p-3">Time</th>
+            <th class="p-3 rounded-r-xl text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="withdrawalsTableBody" class="divide-y divide-gray-800">
+          <tr><td colspan="5" class="p-4 text-center text-gray-500">Loading pending withdrawals...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function fetchPendingWithdrawals() {
+      try {
+        const res = await fetch('/api/admin/pending-withdrawals');
+        const data = await res.json();
+        
+        const tbody = document.getElementById('withdrawalsTableBody');
+        tbody.innerHTML = '';
+
+        if (!data.success || !data.withdrawals || data.withdrawals.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No pending withdrawals found.</td></tr>`;
+          return;
+        }
+
+        data.withdrawals.forEach(tx => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="p-3 font-mono">
+              <div class="font-bold text-white">${tx.userCode || 'N/A'}</div>
+              <div class="text-[10px] text-gray-400">${tx.phone || 'No Phone'}</div>
+            </td>
+            <td class="p-3 font-black text-red-400 text-sm">₹${tx.amount}</td>
+            <td class="p-3 font-mono font-bold text-amber-300 select-all bg-gray-900/60 px-2 py-1 rounded">${tx.utr || tx.bankDetails || 'N/A'}</td>
+            <td class="p-3 text-gray-400 text-[10px]">${new Date(tx.createdAt).toLocaleString()}</td>
+            <td class="p-3 text-right space-x-1">
+              <button onclick="processWithdrawal('${tx._id}', 'Approved')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] transition">Approve</button>
+              <button onclick="processWithdrawal('${tx._id}', 'Rejected')" class="bg-red-600/80 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] transition">Reject</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error fetching withdrawals:', err);
+      }
+    }
+
+    async function processWithdrawal(transactionId, action) {
+      if (!confirm(`Are you sure you want to mark this withdrawal as ${action}?`)) return;
+      try {
+        const res = await fetch('/api/admin/transaction/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId, action })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`Withdrawal ${action} successfully!`);
+          fetchPendingWithdrawals();
+        } else {
+          alert('Error: ' + data.message);
+        }
+      } catch (err) {
+        alert('Server connection error.');
+      }
+    }
+
+    fetchPendingWithdrawals();
+    setInterval(fetchPendingWithdrawals, 5000); // Live poll every 5s
+  </script>
+</body>
+</html>

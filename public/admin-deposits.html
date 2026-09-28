@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Deposit Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #030712; color: #f3f4f6; }
+    .glass { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body class="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
+
+  <!-- TOP BAR -->
+  <header class="flex justify-between items-center bg-gray-900/80 p-4 rounded-2xl border border-gray-800">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg font-bold">
+        <i class="fa-solid fa-wallet"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-extrabold text-white tracking-wide">DEPOSIT APPROVAL PANEL</h1>
+        <div class="text-xs text-emerald-400 font-semibold">Manage & Verify User UTR Deposits</div>
+      </div>
+    </div>
+    <a href="admin.html" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl font-bold transition border border-gray-700">
+      <i class="fa-solid fa-arrow-left mr-1"></i> Dashboard
+    </a>
+  </header>
+
+  <!-- PENDING DEPOSITS TABLE -->
+  <div class="glass p-5 rounded-2xl space-y-4 border border-emerald-500/30">
+    <div class="flex justify-between items-center">
+      <h2 class="text-sm font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-clock-rotate-left"></i> Pending Deposits Queue
+      </h2>
+      <button onclick="fetchPendingDeposits()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700">
+        <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-gray-300">
+        <thead class="bg-gray-800 uppercase text-gray-400 font-bold">
+          <tr>
+            <th class="p-3 rounded-l-xl">User Info</th>
+            <th class="p-3">Method</th>
+            <th class="p-3">Amount</th>
+            <th class="p-3">UTR Reference</th>
+            <th class="p-3">Time</th>
+            <th class="p-3 rounded-r-xl text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="depositsTableBody" class="divide-y divide-gray-800">
+          <tr><td colspan="6" class="p-4 text-center text-gray-500">Loading pending deposits...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function fetchPendingDeposits() {
+      try {
+        const res = await fetch('/api/admin/pending-deposits');
+        const data = await res.json();
+        
+        const tbody = document.getElementById('depositsTableBody');
+        tbody.innerHTML = '';
+
+        if (!data.success || !data.deposits || data.deposits.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">No pending deposits found.</td></tr>`;
+          return;
+        }
+
+        data.deposits.forEach(tx => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="p-3 font-mono">
+              <div class="font-bold text-white">${tx.userCode || 'N/A'}</div>
+              <div class="text-[10px] text-gray-400">${tx.phone || 'No Phone'}</div>
+            </td>
+            <td class="p-3 font-semibold text-blue-400">${tx.method || 'UPI'}</td>
+            <td class="p-3 font-black text-emerald-400 text-sm">₹${tx.amount}</td>
+            <td class="p-3 font-mono font-bold text-amber-300 select-all bg-gray-900/60 px-2 py-1 rounded">${tx.utr}</td>
+            <td class="p-3 text-gray-400 text-[10px]">${new Date(tx.createdAt).toLocaleString()}</td>
+            <td class="p-3 text-right space-x-1">
+              <button onclick="processDeposit('${tx._id}', 'Approved')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] transition">Approve</button>
+              <button onclick="processDeposit('${tx._id}', 'Rejected')" class="bg-red-600/80 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] transition">Reject</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error fetching deposits:', err);
+      }
+    }
+
+    async function processDeposit(transactionId, action) {
+      if (!confirm(`Are you sure you want to mark this deposit as ${action}?`)) return;
+      try {
+        const res = await fetch('/api/admin/transaction/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId, action })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`Deposit ${action} successfully!`);
+          fetchPendingDeposits();
+        } else {
+          alert('Error: ' + data.message);
+        }
+      } catch (err) {
+        alert('Server connection error.');
+      }
+    }
+
+    fetchPendingDeposits();
+    setInterval(fetchPendingDeposits, 5000); // Live poll every 5s
+  </script>
+</body>
+</html>

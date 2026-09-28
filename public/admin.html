@@ -34,6 +34,37 @@
     </div>
   </header>
 
+  <!-- QUICK NAVIGATION FOR DEPOSIT & WITHDRAWAL PANELS -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- Deposit Panel Link Card -->
+    <a href="admin-deposits.html" class="glass p-5 rounded-2xl flex justify-between items-center border border-emerald-500/30 hover:border-emerald-500 transition group">
+      <div class="space-y-1">
+        <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-wallet text-base"></i> Deposit Control Panel
+        </div>
+        <div class="text-xs text-gray-400">Manage UTR verification & approve deposits</div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="pendingDepositsBadge" class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-2.5 py-1 rounded-full text-xs font-bold">0 Pending</span>
+        <i class="fa-solid fa-arrow-right text-emerald-400 group-hover:translate-x-1 transition"></i>
+      </div>
+    </a>
+
+    <!-- Withdrawal Panel Link Card -->
+    <a href="admin-withdrawals.html" class="glass p-5 rounded-2xl flex justify-between items-center border border-red-500/30 hover:border-red-500 transition group">
+      <div class="space-y-1">
+        <div class="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-money-bill-transfer text-base"></i> Withdrawal Control Panel
+        </div>
+        <div class="text-xs text-gray-400">Manage payout requests & bank/UPI details</div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="pendingWithdrawalsBadge" class="bg-red-500/20 border border-red-500/40 text-red-400 px-2.5 py-1 rounded-full text-xs font-bold">0 Pending</span>
+        <i class="fa-solid fa-arrow-right text-red-400 group-hover:translate-x-1 transition"></i>
+      </div>
+    </a>
+  </div>
+
   <!-- METRICS OVERVIEW -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
     <div class="glass p-5 rounded-2xl space-y-1">
@@ -121,6 +152,25 @@
       } catch (err) {}
     }
 
+    // Fetch pending counts to show live badge indicators
+    async function fetchPendingCounts() {
+      try {
+        const [depRes, withRes] = await Promise.all([
+          fetch('/api/admin/pending-deposits'),
+          fetch('/api/admin/pending-withdrawals')
+        ]);
+        const depData = await depRes.json();
+        const withData = await withRes.json();
+
+        if (depData.success && depData.deposits) {
+          document.getElementById('pendingDepositsBadge').innerText = `${depData.deposits.length} Pending`;
+        }
+        if (withData.success && withData.withdrawals) {
+          document.getElementById('pendingWithdrawalsBadge').innerText = `${withData.withdrawals.length} Pending`;
+        }
+      } catch (err) {}
+    }
+
     async function fetchUsers() {
       try {
         const res = await fetch('/api/admin/users');
@@ -192,9 +242,11 @@
     // Initial loads & polling
     fetchMetrics();
     fetchUsers();
+    fetchPendingCounts();
     setInterval(() => {
       fetchMetrics();
       fetchUsers();
+      fetchPendingCounts();
     }, 5000);
   </script>
 </body>
