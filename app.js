@@ -242,3 +242,46 @@ app.get('/', (req, res) => {
 });
 
 module.exports = app;
+// ==========================================
+// PLACE BET ROUTE
+// ==========================================
+app.post('/api/user/bet', async (req, res) => {
+  console.log("📥 [Bet Endpoint Hit] Request Body:", req.body);
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const { amount, color } = req.body;
+    if (!amount || !color) {
+      return res.status(400).json({ success: false, message: 'Amount and color are required' });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.totalBalance < amount) {
+      return res.status(400).json({ success: false, message: 'Insufficient balance' });
+    }
+
+    // Deduct bet amount from user's balance
+    user.totalBalance -= Number(amount);
+    await user.save();
+
+    console.log(`🟢 [SUCCESS] Bet of ₹${amount} placed on ${color} by user ${user.userCode}`);
+    res.status(200).json({ 
+      success: true, 
+      message: 'Bet placed successfully', 
+      newBalance: user.totalBalance 
+    });
+  } catch (err) {
+    console.error("❌ Bet Server Error:", err);
+    res.status(500).json({ success: false, message: 'Server error placing bet' });
+  }
+});
