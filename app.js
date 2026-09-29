@@ -387,13 +387,29 @@ app.delete('/api/admin/user/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// PENDING DEPOSITS ROUTE (FORMATTED)
+// ==========================================
 app.get('/api/admin/pending-deposits', async (req, res) => {
   try {
     const deposits = await Transaction.find({ type: 'deposit', status: 'Pending' })
       .populate('userId', 'phoneNumber userCode')
       .sort({ createdAt: -1 });
-    res.status(200).json({ success: true, deposits });
+    
+    // Map the fields so the frontend admin panel can read them easily
+    const formatted = deposits.map(tx => ({
+      _id: tx._id,
+      userCode: tx.userId ? tx.userId.userCode : 'N/A',
+      phone: tx.userId ? tx.userId.phoneNumber : 'N/A',
+      amount: tx.amount,
+      utr: tx.utr,
+      method: tx.method,
+      createdAt: tx.createdAt
+    }));
+
+    res.status(200).json({ success: true, deposits: formatted });
   } catch (err) {
+    console.error("❌ Error fetching pending deposits:", err);
     res.status(500).json({ success: false, message: 'Server error fetching deposits' });
   }
 });
