@@ -126,9 +126,31 @@ app.get('/api/user/profile', async (req, res) => {
   }
 }); // <--- End of profile route
 
-// ==========================================
-// ➡️ PASTE THIS NEW TRANSACTION ROUTE RIGHT HERE:
-// ==========================================
+app.get('/api/user/profile', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ success: false, message: 'No token provided' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const user = await User.findById(decoded.userId).select('-password');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    res.status(200).json({
+      success: true,
+      phoneNumber: user.phoneNumber,
+      userCode: user.userCode,
+      totalBalance: user.totalBalance,
+      depositBalance: user.depositBalance,
+      bonusBalance: user.bonusBalance,
+      winBalance: user.winBalance,
+      isApproved: user.isApproved
+    });
+  } catch (err) {
+    res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+});
+
 app.get('/api/user/transactions', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
