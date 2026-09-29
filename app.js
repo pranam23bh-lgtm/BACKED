@@ -309,6 +309,9 @@ app.get('/api/admin/pending-withdrawals', async (req, res) => {
   }
 });
 
+// ==========================================
+// ADMIN TRANSACTION ACTION (APPROVE / REJECT)
+// ==========================================
 app.post('/api/admin/transaction/action', async (req, res) => {
   try {
     const { transactionId, action } = req.body;
@@ -322,12 +325,30 @@ app.post('/api/admin/transaction/action', async (req, res) => {
     tx.status = action;
     await tx.save();
 
+    // 1. IF DEPOSIT IS APPROVED -> CREDIT USER WALLET
+    if (action === 'Approved' && tx.type === 'deposit') {
+      await User.findByIdAndUpdate(tx.userId, { 
+        $inc: { 
+          totalBalance: tx.amount, 
+          depositBalance: tx.amount 
+        } 
+      });
+      console.log(`🟢 [WALLET CREDITED] Added ₹${tx.amount} to user ID: ${tx.userId}`);
+    }
+
+    // 2. IF WITHDRAWAL IS REJECTED -> REFUND USER WALLET
     if (action === 'Rejected' && tx.type === 'withdraw') {
-      await User.findByIdAndUpdate(tx.userId, { $inc: { totalBalance: tx.amount } });
+      await User.findByIdAndUpdate(tx.userId, { 
+        $inc: { 
+          totalBalance: tx.amount 
+        } 
+      });
+      console.log(`🟡 [WALLET REFUNDED] Refunded ₹${tx.amount} to user ID: ${tx.userId}`);
     }
 
     res.status(200).json({ success: true, message: `Transaction ${action} successfully` });
   } catch (err) {
+    console.error("❌ Transaction Action Error:", err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -396,7 +417,6 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
       .populate('userId', 'phoneNumber userCode')
       .sort({ createdAt: -1 });
     
-    // Map the fields so the frontend admin panel can read them easily
     const formatted = deposits.map(tx => ({
       _id: tx._id,
       userCode: tx.userId ? tx.userId.userCode : 'N/A',
@@ -406,14 +426,6 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
       method: tx.method,
       createdAt: tx.createdAt
     }));
-
-    // MAKE SURE THIS PART IS INCLUDED AT THE END:
-    res.status(200).json({ success: true, deposits: formatted });
-  } catch (err) {
-    console.error("❌ Error fetching pending deposits:", err);
-    res.status(500).json({ success: false, message: 'Server error fetching deposits' });
-  }
-});
 
     res.status(200).json({ success: true, deposits: formatted });
   } catch (err) {
