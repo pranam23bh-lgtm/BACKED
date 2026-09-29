@@ -407,6 +407,14 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
       createdAt: tx.createdAt
     }));
 
+    // MAKE SURE THIS PART IS INCLUDED AT THE END:
+    res.status(200).json({ success: true, deposits: formatted });
+  } catch (err) {
+    console.error("❌ Error fetching pending deposits:", err);
+    res.status(500).json({ success: false, message: 'Server error fetching deposits' });
+  }
+});
+
     res.status(200).json({ success: true, deposits: formatted });
   } catch (err) {
     console.error("❌ Error fetching pending deposits:", err);
