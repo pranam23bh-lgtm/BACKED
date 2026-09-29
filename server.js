@@ -133,6 +133,40 @@ setInterval(async () => {
     }, 3000);
   }
 
+// --- OUTCOME SELECTION (Manual Force + Smart Control) ---
+    if (adminOverride === 'SMART') {
+      const pools = global.colorPools || { GREEN: 0, RED: 0, WHITE: 0 };
+      const totalCollection = (pools.GREEN || 0) + (pools.RED || 0) + (pools.WHITE || 0);
+
+      if (totalCollection === 0) {
+        // Fallback if no bets were placed
+        const fallbackColors = ['GREEN', 'RED', 'WHITE'];
+        currentOutcome = fallbackColors[Math.floor(Math.random() * fallbackColors.length)];
+      } else {
+        // Calculate house profit for each color (Green/Red = 2x payout, White = 5x payout)
+        const profitGreen = totalCollection - ((pools.GREEN || 0) * 2);
+        const profitRed = totalCollection - ((pools.RED || 0) * 2);
+        const profitWhite = totalCollection - ((pools.WHITE || 0) * 5);
+
+        // Rank by highest house profit
+        const rankedOutcomes = [
+          { color: 'GREEN', profit: profitGreen },
+          { color: 'RED', profit: profitRed },
+          { color: 'WHITE', profit: profitWhite }
+        ].sort((a, b) => b.profit - a.profit);
+
+        currentOutcome = rankedOutcomes[0].color;
+        console.log(`🧠 [SMART CONTROL] Pools: Green ₹${pools.GREEN}, White ₹${pools.WHITE}, Red ₹${pools.RED} -> Forced Winner: ${currentOutcome} (Max Profit)`);
+      }
+    } else if (adminOverride !== 'AUTO') {
+      // Your existing manual force control (GREEN, RED, WHITE)
+      currentOutcome = adminOverride;
+    } else {
+      // Normal Random Mode
+      const colors = ['GREEN', 'RED', 'GREEN', 'RED', 'WHITE'];
+      currentOutcome = colors[Math.floor(Math.random() * colors.length)];
+    }
+
   // Broadcast live timer tick
   io.emit('master_tick', {
     roundId: currentRoundId,

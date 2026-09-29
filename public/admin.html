@@ -164,50 +164,92 @@ loadAdminUpi();
     </div>
   </div>
 
-  <!-- FORCE OUTCOME CONTROL -->
-  <div class="glass p-5 rounded-2xl space-y-4 border border-amber-500/30">
-    <h2 class="text-sm font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-      <i class="fa-solid fa-wand-magic-sparkles"></i> Force Round Outcome
+<!-- FORCE OUTCOME CONTROL -->
+<div class="glass-card p-6 rounded-3xl space-y-4 border border-amber-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl bg-gray-900/40">
+  <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
+  
+  <div class="flex items-center justify-between">
+    <h2 class="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+      <div class="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+        <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
+      </div>
+      Force Round Outcome
     </h2>
-    <div class="grid grid-cols-4 gap-2">
-      <button onclick="setOverride('AUTO')" id="btn-AUTO" class="py-2.5 rounded-xl font-extrabold text-xs bg-emerald-600 text-white">AUTO</button>
-      <button onclick="setOverride('GREEN')" id="btn-GREEN" class="py-2.5 rounded-xl font-extrabold text-xs bg-gray-800 text-gray-300">GREEN</button>
-      <button onclick="setOverride('WHITE')" id="btn-WHITE" class="py-2.5 rounded-xl font-extrabold text-xs bg-gray-800 text-gray-300">WHITE</button>
-      <button onclick="setOverride('RED')" id="btn-RED" class="py-2.5 rounded-xl font-extrabold text-xs bg-gray-800 text-gray-300">RED</button>
-    </div>
-    <div class="text-xs text-gray-400">Current Forced Result: <span id="activeOverrideText" class="font-bold text-amber-400">AUTO</span></div>
+    <span class="text-[10px] text-gray-400 font-medium">Real-time Override</span>
   </div>
 
-  <!-- USER REGISTRATIONS APPROVAL -->
-  <div class="glass p-5 rounded-2xl space-y-4 border border-blue-500/30">
-    <h2 class="text-sm font-extrabold text-blue-400 uppercase tracking-wider flex items-center gap-2">
-      <i class="fa-solid fa-users-gear"></i> User Registration Approvals
-    </h2>
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs text-gray-300">
-        <thead class="bg-gray-800 uppercase text-gray-400 font-bold">
-          <tr>
-            <th class="p-3 rounded-l-xl">User ID</th>
-            <th class="p-3">Phone Number</th>
-            <th class="p-3">Registration IP</th>
-            <th class="p-3">Status</th>
-            <th class="p-3 rounded-r-xl text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="userTableBody" class="divide-y divide-gray-800">
-          <tr><td colspan="5" class="p-4 text-center text-gray-500">Loading users...</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <div class="grid grid-cols-5 gap-2">
+    <button onclick="setOverride('AUTO')" id="btn-AUTO" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-300 border border-gray-800 transition-all duration-200 hover:border-gray-600 active:scale-95 shadow-lg">AUTO</button>
+    <button onclick="setOverride('SMART')" id="btn-SMART" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-purple-950/60 text-purple-300 border border-purple-600/40 transition-all duration-200 hover:bg-purple-900/60 active:scale-95 shadow-lg shadow-purple-900/20">🧠💝 kill</button>
+    <button onclick="setOverride('GREEN')" id="btn-GREEN" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-emerald-950/50 text-emerald-300 border border-emerald-600/30 transition-all duration-200 hover:bg-emerald-900/50 active:scale-95 shadow-lg">GREEN</button>
+    <button onclick="setOverride('WHITE')" id="btn-WHITE" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-200 border border-gray-700/50 transition-all duration-200 hover:bg-gray-800 active:scale-95 shadow-lg">WHITE</button>
+    <button onclick="setOverride('RED')" id="btn-RED" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-rose-950/50 text-rose-300 border border-rose-600/30 transition-all duration-200 hover:bg-rose-900/50 active:scale-95 shadow-lg">RED</button>
   </div>
 
-  <script>
-    const socket = io();
+  <div class="flex items-center justify-between pt-2 border-t border-gray-800/60 text-xs">
+    <span class="text-gray-400 font-medium">Current Forced Mode:</span>
+    <span id="activeOverrideText" class="font-black text-amber-400 tracking-wider bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20">AUTO</span>
+  </div>
+</div>
 
-    socket.on('master_tick', (data) => {
-      document.getElementById('adminRoundId').innerText = `#${data.roundId}`;
-      document.getElementById('poolTimer').innerText = `${data.timer}s`;
-      updateOverrideUI(data.adminOverride);
+<!-- USER REGISTRATIONS APPROVAL -->
+<div class="glass-card p-6 rounded-3xl space-y-4 border border-blue-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl bg-gray-900/40 mt-4">
+  <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
+
+  <div class="flex items-center justify-between">
+    <h2 class="text-xs font-extrabold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+      <div class="w-7 h-7 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
+        <i class="fa-solid fa-users-gear text-xs"></i>
+      </div>
+      User Registration Approvals
+    </h2>
+    <span class="text-[10px] text-gray-400 font-medium">Pending Queue</span>
+  </div>
+
+  <div class="overflow-x-auto no-scrollbar">
+    <table class="w-full text-left text-xs text-gray-300 border-collapse">
+      <thead>
+        <tr class="bg-gray-900/80 text-gray-400 font-bold uppercase text-[10px] tracking-wider border-b border-gray-800">
+          <th class="p-3.5 rounded-l-xl">User ID</th>
+          <th class="p-3.5">Phone Number</th>
+          <th class="p-3.5">Registration IP</th>
+          <th class="p-3.5">Status</th>
+          <th class="p-3.5 rounded-r-xl text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="userTableBody" class="divide-y divide-gray-800/60 font-medium">
+        <tr>
+          <td colspan="5" class="p-6 text-center text-gray-500 italic">Loading registration queue...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const socket = io();
+
+  socket.on('master_tick', (data) => {
+    document.getElementById('adminRoundId').innerText = `#${data.roundId}`;
+    document.getElementById('poolTimer').innerText = `${data.timer}s`;
+    updateOverrideUI(data.adminOverride); 
+  });
+
+  // Example UI update helper for your override state selection
+  function updateOverrideUI(activeMode) {
+    document.getElementById('activeOverrideText').innerText = activeMode;
+    ['AUTO', 'SMART', 'GREEN', 'WHITE', 'RED'].forEach(mode => {
+      const btn = document.getElementById(`btn-${mode}`);
+      if (btn) {
+        if (mode === activeMode) {
+          btn.classList.add('ring-2', 'ring-white', 'scale-105', 'shadow-2xl');
+        } else {
+          btn.classList.remove('ring-2', 'ring-white', 'scale-105', 'shadow-2xl');
+        }
+      }
+    });
+  }
+</script>
 
       // Update Live Pools
       if (data.colorPools) {
