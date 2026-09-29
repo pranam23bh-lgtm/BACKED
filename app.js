@@ -37,7 +37,7 @@ const transactionSchema = new mongoose.Schema({
   type: { type: String, enum: ['deposit', 'withdraw'], required: true },
   amount: { type: Number, required: true },
   status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-  utr: { type: String },
+  utr: { type: String, unique: true, sparse: true }, // <-- ADDED unique and sparse here
   method: { type: String },
   bankDetails: { type: String },
   createdAt: { type: Date, default: Date.now }
