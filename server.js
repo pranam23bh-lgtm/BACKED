@@ -9,7 +9,7 @@ process.on('unhandledRejection', (reason, promise) => {
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
-const app = require('./app');
+const app = require('./app.js');
 
 const User = mongoose.model('User');
 
