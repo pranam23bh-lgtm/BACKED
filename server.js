@@ -29,6 +29,7 @@ let onlineUsers = 0;
 let timeRemaining = 30;
 let currentOutcome = 'GREEN';
 let gameHistory = ['GREEN', 'RED', 'WHITE', 'GREEN']; 
+let isTransitioning = false; // Prevents timer overlaps and double payouts
 
 io.on('connection', (socket) => {
   onlineUsers++;
@@ -44,6 +45,7 @@ io.on('connection', (socket) => {
     if (['AUTO', 'SMART', 'GREEN', 'WHITE', 'RED'].includes(mode)) {
       adminOverride = mode;
       io.emit('admin_override_update', { adminOverride });
+      console.log(`🎮 [ADMIN OVERRIDE] Mode set to: ${adminOverride}`);
     }
   });
 
@@ -54,12 +56,15 @@ io.on('connection', (socket) => {
 
 // --- GAME LOOP TIMER & SETTLEMENT ---
 setInterval(async () => {
+  if (isTransitioning) return; // Stops the loop from running during result pause
+
   timeRemaining--;
 
   // Lock betting at 10 seconds remaining
   let phase = timeRemaining <= 10 ? 'CLOSED' : 'BETTING';
 
   if (timeRemaining <= 0) {
+    isTransitioning = true; // Lock immediately to prevent double execution
     phase = 'RESULT';
 
     // 1. DETERMINE WINNING OUTCOME (AUTO, SMART, GREEN, WHITE, RED)
@@ -91,7 +96,7 @@ setInterval(async () => {
       currentOutcome = colors[Math.floor(Math.random() * colors.length)];
     }
 
-    // 2. Process Payouts & Wins for Active Bets
+    // 2. Process Payouts & Wins for Active Bets (Runs ONLY ONCE per round now)
     const roundBets = [...global.currentRoundBets];
     global.currentRoundBets = [];
     global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
@@ -134,6 +139,7 @@ setInterval(async () => {
     setTimeout(() => {
       currentRoundId++;
       timeRemaining = 30;
+      isTransitioning = false; // Unlock timer ticks for the new round
       phase = 'BETTING';
 
       io.emit('master_tick', {
@@ -151,9 +157,11 @@ setInterval(async () => {
         currentRoundBets: global.currentRoundBets
       });
     }, 3000);
+
+    return;
   }
 
-  // Broadcast live timer tick
+  // Broadcast live timer tick during normal countdown
   io.emit('master_tick', {
     roundId: currentRoundId,
     timeLeft: timeRemaining,
