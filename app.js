@@ -119,8 +119,30 @@ app.get('/api/user/profile', async (req, res) => {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const user = await User.findById(decoded.userId).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    // ... (rest of your existing profile code) ...
+    
+  } catch (err) {
+    res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+}); // <--- End of profile route
+
+// ==========================================
+// ➡️ PASTE THIS NEW TRANSACTION ROUTE RIGHT HERE:
+// ==========================================
+app.get('/api/user/transactions', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const transactions = await Transaction.find({ userId: decoded.userId }).sort({ createdAt: -1 });
+    res.status(200).json({ success: true, transactions });
+  } catch (err) {
+    res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+});
 
     res.status(200).json({
       phoneNumber: user.phoneNumber,
