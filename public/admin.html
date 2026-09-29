@@ -42,6 +42,66 @@
     </div>
   </header>
 
+<!-- ========================================== -->
+<!-- ADMIN UPI / PAYMENT SETTING BOX             -->
+<!-- ========================================== -->
+<div class="card p-4 mb-4" style="background: #1e1e2d; color: white; border-radius: 10px;">
+    <h3 style="margin-bottom: 10px;">⚙️ Manage Frontend UPI ID / Message</h3>
+    <p style="color: #a0a0a0; font-size: 14px;">
+        Type any UPI ID, instructions, or special characters below. It will update instantly on the user deposit screen.
+    </p>
+    
+    <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <input type="text" id="adminUpiInput" placeholder="e.g., merchant@ybl or custom text" 
+               style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #2a2a3d; color: white;">
+        <button onclick="saveUpiId()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+            Save UPI
+        </button>
+    </div>
+    <span id="upiSaveStatus" style="color: #28a745; font-size: 13px; margin-top: 8px; display: none;">✅ Saved successfully!</span>
+</div>
+
+<script>
+// 1. Fetch current UPI when admin page loads
+async function loadAdminUpi() {
+    try {
+        const res = await fetch('/api/settings/upi');
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('adminUpiInput').value = data.upiId;
+        }
+    } catch (err) {
+        console.error("Error loading UPI setting:", err);
+    }
+}
+
+// 2. Save new UPI / Text to backend
+async function saveUpiId() {
+    const upiId = document.getElementById('adminUpiInput').value;
+    try {
+        const res = await fetch('/api/admin/settings/upi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ upiId })
+        });
+        const data = await res.json();
+        if (data.success) {
+            const status = document.getElementById('upiSaveStatus');
+            status.style.display = 'block';
+            setTimeout(() => { status.style.display = 'none'; }, 3000);
+        } else {
+            alert(data.message || 'Failed to save');
+        }
+    } catch (err) {
+        console.error("Error saving UPI:", err);
+        alert('Server error saving UPI ID');
+    }
+}
+
+// Run loader on startup
+loadAdminUpi();
+</script>
+
   <!-- METRICS OVERVIEW -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
     <div class="glass p-5 rounded-2xl space-y-1">

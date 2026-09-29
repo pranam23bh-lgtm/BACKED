@@ -180,6 +180,31 @@ app.post('/api/user/withdraw', async (req, res) => {
   }
 });
 
+// ==========================================
+// SAVE UPI SETTING ROUTE (ADMIN)
+// ==========================================
+app.post('/api/admin/settings/upi', async (req, res) => {
+  try {
+    const { upiId } = req.body;
+    if (!upiId) {
+      return res.status(400).json({ success: false, message: 'UPI ID/Text is required' });
+    }
+
+    // Upsert (update if exists, create if not)
+    await Setting.findOneAndUpdate(
+      { key: 'upi_id' },
+      { value: upiId },
+      { upsert: true, new: true }
+    );
+
+    console.log(`🟢 [UPI UPDATED] New Merchant UPI/Text set to: ${upiId}`);
+    res.status(200).json({ success: true, message: 'UPI ID updated successfully' });
+  } catch (err) {
+    console.error("❌ Error updating UPI ID:", err);
+    res.status(500).json({ success: false, message: 'Server error updating UPI ID' });
+  }
+});
+
 app.post('/api/user/deposit', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
