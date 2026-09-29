@@ -146,7 +146,17 @@ app.get('/api/user/transactions', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const transactions = await Transaction.find({ userId: decoded.userId }).sort({ createdAt: -1 });
-    res.status(200).json({ success: true, transactions });
+    
+    // Hide/Remove UTR for deposits so it doesn't show on the frontend
+    const sanitizedTransactions = transactions.map(tx => {
+      const t = tx.toObject();
+      if (t.type === 'deposit') {
+        delete t.utr;
+      }
+      return t;
+    });
+
+    res.status(200).json({ success: true, transactions: sanitizedTransactions });
   } catch (err) {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
@@ -161,7 +171,17 @@ app.get('/api/user/history', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const transactions = await Transaction.find({ userId: decoded.userId }).sort({ createdAt: -1 });
-    res.status(200).json({ success: true, transactions, history: transactions });
+    
+    // Hide/Remove UTR for deposits in history as well
+    const sanitizedTransactions = transactions.map(tx => {
+      const t = tx.toObject();
+      if (t.type === 'deposit') {
+        delete t.utr;
+      }
+      return t;
+    });
+
+    res.status(200).json({ success: true, transactions: sanitizedTransactions, history: sanitizedTransactions });
   } catch (err) {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
