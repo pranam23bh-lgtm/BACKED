@@ -152,6 +152,21 @@ app.get('/api/user/transactions', async (req, res) => {
   }
 });
 
+app.get('/api/user/history', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const transactions = await Transaction.find({ userId: decoded.userId }).sort({ createdAt: -1 });
+    res.status(200).json({ success: true, transactions, history: transactions });
+  } catch (err) {
+    res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+});
+
 // ==========================================
 // WITHDRAWAL & DEPOSIT ROUTES
 // ==========================================
