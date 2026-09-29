@@ -180,7 +180,6 @@ app.post('/api/user/withdraw', async (req, res) => {
   }
 });
 
-// 2. Submit Deposit Request (Fixes the 404 Error)
 app.post('/api/user/deposit', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -195,6 +194,16 @@ app.post('/api/user/deposit', async (req, res) => {
     if (!amount || !utr) {
       return res.status(400).json({ success: false, message: 'Amount and UTR are required' });
     }
+
+    // --- CHECK IF UTR ALREADY EXISTS ---
+    const existingUtr = await Transaction.findOne({ utr });
+    if (existingUtr) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'This UTR has already been submitted before. Please use a unique UTR.' 
+      });
+    }
+    // -----------------------------------
 
     const user = await User.findById(decoded.userId);
     if (!user) {
@@ -405,6 +414,18 @@ app.delete('/api/admin/user/:id', async (req, res) => {
     res.status(200).json({ success: true, message: 'User deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error deleting user' });
+  }
+});
+
+// ==========================================
+// UPI SETTINGS ROUTE (FIXES 404 ERROR)
+// ==========================================
+app.get('/api/settings/upi', async (req, res) => {
+  try {
+    const setting = await Setting.findOne({ key: 'upi_id' });
+    res.status(200).json({ success: true, upiId: setting ? setting.value : 'merchant@ybl' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error fetching UPI ID' });
   }
 });
 
