@@ -15,6 +15,11 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
+// --- MAKE IO & POOLS GLOBALLY ACCESSIBLE FOR INSTANT BET SYNC ---
+global.io = io;
+global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
+global.currentRoundBets = [];
+
 let currentRoundId = 100334;
 let adminOverride = 'AUTO';
 let onlineUsers = 0;
@@ -24,8 +29,14 @@ let gameHistory = ['GREEN', 'RED', 'WHITE', 'GREEN'];
 
 io.on('connection', (socket) => {
   onlineUsers++;
+  
+  // Send initial data to newly connected clients/admin
   socket.emit('round_result', { history: gameHistory });
   socket.emit('admin_override_update', { adminOverride });
+  socket.emit('live_bet_update', {
+    colorPools: global.colorPools,
+    currentRoundBets: global.currentRoundBets
+  });
 
   socket.on('admin_set_override', (mode) => {
     if (['AUTO', 'GREEN', 'WHITE', 'RED'].includes(mode)) {
@@ -44,6 +55,10 @@ setInterval(() => {
   let phase = timeRemaining <= 15 ? 'CLOSED' : 'BETTING';
 
   if (timeRemaining <= 0) {
+    // Reset pools and bets when a new round starts
+    global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
+    global.currentRoundBets = [];
+
     if (adminOverride !== 'AUTO') {
       currentOutcome = adminOverride;
     } else {
@@ -65,6 +80,7 @@ setInterval(() => {
     phase = 'BETTING';
   }
 
+  // Broadcast tick with updated pool totals & live bet feeds
   io.emit('master_tick', {
     roundId: currentRoundId,
     timeLeft: timeRemaining,
@@ -75,7 +91,9 @@ setInterval(() => {
     outcome: currentOutcome,
     color: currentOutcome,
     adminOverride: adminOverride,
-    onlineUsers: onlineUsers
+    onlineUsers: onlineUsers,
+    colorPools: global.colorPools,
+    currentRoundBets: global.currentRoundBets
   });
 }, 1000);
 

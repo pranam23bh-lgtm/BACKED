@@ -137,36 +137,25 @@ app.get('/api/user/profile', async (req, res) => {
 });
 
 // ==========================================
-// WITHDRAWAL & DEPOSIT ROUTES (WITH LOGGING)
+// WITHDRAWAL & DEPOSIT ROUTES
 // ==========================================
 app.post('/api/user/withdraw', async (req, res) => {
-  console.log("📥 [Withdrawal Endpoint Hit] Request Body:", req.body);
   try {
     const authHeader = req.headers['authorization'];
-    if (!authHeader) {
-      console.log("❌ Withdrawal Rejected: No authorization token provided");
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
-    }
+    if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const { amount, bankDetails } = req.body;
     if (!amount || !bankDetails) {
-      console.log("❌ Withdrawal Rejected: Missing amount or bank details");
       return res.status(400).json({ success: false, message: 'Amount and destination details are required' });
     }
 
     const user = await User.findById(decoded.userId);
-    if (!user) {
-      console.log("❌ Withdrawal Rejected: User not found in database");
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    console.log(`👤 User ${user.userCode} requested withdrawal of ₹${amount}. Current Balance: ₹${user.totalBalance}`);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     if (user.totalBalance < amount) {
-      console.log(`❌ Withdrawal Rejected: Insufficient balance.`);
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
@@ -182,7 +171,6 @@ app.post('/api/user/withdraw', async (req, res) => {
     });
 
     await newWithdrawal.save();
-    console.log(`🟢 [SUCCESS] Withdrawal request saved to database for user ${user.userCode}`);
     res.status(200).json({ success: true, message: 'Withdrawal request submitted successfully' });
   } catch (err) {
     console.error("❌ Withdrawal Server Error:", err);
@@ -191,7 +179,69 @@ app.post('/api/user/withdraw', async (req, res) => {
 });
 
 // ==========================================
-// ADMIN ROUTES
+// PLACE BET ROUTE (WITH LIVE SOCKET BROADCAST)
+// ==========================================
+app.post('/api/user/bet', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const { amount, color } = req.body;
+    if (!amount || !color) {
+      return res.status(400).json({ success: false, message: 'Amount and color are required' });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.totalBalance < amount) {
+      return res.status(400).json({ success: false, message: 'Insufficient balance' });
+    }
+
+    // Deduct bet amount from user's balance
+    user.totalBalance -= Number(amount);
+    await user.save();
+
+    // --- UPDATE GLOBAL POOLS & BROADCAST INSTANTLY ---
+    if (!global.colorPools) global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
+    if (!global.currentRoundBets) global.currentRoundBets = [];
+
+    const normalizedColor = color.toUpperCase();
+    if (global.colorPools[normalizedColor] !== undefined) {
+      global.colorPools[normalizedColor] += Number(amount);
+    }
+
+    global.currentRoundBets.unshift({
+      userCode: user.userCode,
+      color: normalizedColor,
+      amount: Number(amount),
+      time: new Date().toLocaleTimeString()
+    });
+
+    if (global.io) {
+      global.io.emit('live_bet_update', {
+        colorPools: global.colorPools,
+        currentRoundBets: global.currentRoundBets
+      });
+    }
+    // ------------------------------------------------
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Bet placed successfully', 
+      newBalance: user.totalBalance 
+    });
+  } catch (err) {
+    console.error("❌ Bet Server Error:", err);
+    res.status(500).json({ success: false, message: 'Server error placing bet' });
+  }
+});
+
+// ==========================================
+// ADMIN ROUTES & METRICS
 // ==========================================
 app.get('/api/admin/pending-withdrawals', async (req, res) => {
   try {
@@ -237,59 +287,6 @@ app.post('/api/admin/transaction/action', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
-module.exports = app;
-// ==========================================
-// PLACE BET ROUTE
-// ==========================================
-app.post('/api/user/bet', async (req, res) => {
-  console.log("📥 [Bet Endpoint Hit] Request Body:", req.body);
-  try {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    const { amount, color } = req.body;
-    if (!amount || !color) {
-      return res.status(400).json({ success: false, message: 'Amount and color are required' });
-    }
-
-    const user = await User.findById(decoded.userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    if (user.totalBalance < amount) {
-      return res.status(400).json({ success: false, message: 'Insufficient balance' });
-    }
-
-    // Deduct bet amount from user's balance
-    user.totalBalance -= Number(amount);
-    await user.save();
-
-    console.log(`🟢 [SUCCESS] Bet of ₹${amount} placed on ${color} by user ${user.userCode}`);
-    res.status(200).json({ 
-      success: true, 
-      message: 'Bet placed successfully', 
-      newBalance: user.totalBalance 
-    });
-  } catch (err) {
-    console.error("❌ Bet Server Error:", err);
-    res.status(500).json({ success: false, message: 'Server error placing bet' });
-  }
-});
-// ==========================================
-// MISSING ADMIN API ROUTES (FIXES 404 ERRORS)
-// ==========================================
-
-// 1. Admin Metrics Overview
 app.get('/api/admin/metrics', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
@@ -316,7 +313,6 @@ app.get('/api/admin/metrics', async (req, res) => {
   }
 });
 
-// 2. Get All Users
 app.get('/api/admin/users', async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ _id: -1 });
@@ -326,7 +322,6 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
-// 3. Approve User Registration
 app.post('/api/admin/approve-user/:id', async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(req.params.id, { isApproved: true }, { new: true });
@@ -337,7 +332,6 @@ app.post('/api/admin/approve-user/:id', async (req, res) => {
   }
 });
 
-// 4. Delete User
 app.delete('/api/admin/user/:id', async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -348,7 +342,6 @@ app.delete('/api/admin/user/:id', async (req, res) => {
   }
 });
 
-// 5. Pending Deposits Route
 app.get('/api/admin/pending-deposits', async (req, res) => {
   try {
     const deposits = await Transaction.find({ type: 'deposit', status: 'Pending' })
@@ -359,3 +352,10 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error fetching deposits' });
   }
 });
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// EXPORT APP AT THE VERY BOTTOM
+module.exports = app;
