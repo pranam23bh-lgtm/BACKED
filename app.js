@@ -115,20 +115,6 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/user/profile', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ message: 'No token provided' });
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    // ... (rest of your existing profile code) ...
-    
-  } catch (err) {
-    res.status(401).json({ success: false, message: 'Invalid or expired token' });
-  }
-}); // <--- End of profile route
-
-app.get('/api/user/profile', async (req, res) => {
-  try {
-    const authHeader = req.headers['authorization'];
     if (!authHeader) return res.status(401).json({ success: false, message: 'No token provided' });
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -166,25 +152,9 @@ app.get('/api/user/transactions', async (req, res) => {
   }
 });
 
-    res.status(200).json({
-      phoneNumber: user.phoneNumber,
-      userCode: user.userCode,
-      totalBalance: user.totalBalance,
-      depositBalance: user.depositBalance,
-      bonusBalance: user.bonusBalance,
-      winBalance: user.winBalance,
-      isApproved: user.isApproved
-    });
-  } catch (err) {
-    res.status(401).json({ message: 'Invalid or expired token' });
-  }
-});
-
-/// ==========================================
+// ==========================================
 // WITHDRAWAL & DEPOSIT ROUTES
 // ==========================================
-
-// 1. Submit Withdrawal Request
 app.post('/api/user/withdraw', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -224,9 +194,6 @@ app.post('/api/user/withdraw', async (req, res) => {
   }
 });
 
-// ==========================================
-// SAVE UPI SETTING ROUTE (ADMIN)
-// ==========================================
 app.post('/api/admin/settings/upi', async (req, res) => {
   try {
     const { upiId } = req.body;
@@ -234,7 +201,6 @@ app.post('/api/admin/settings/upi', async (req, res) => {
       return res.status(400).json({ success: false, message: 'UPI ID/Text is required' });
     }
 
-    // Upsert (update if exists, create if not)
     await Setting.findOneAndUpdate(
       { key: 'upi_id' },
       { value: upiId },
@@ -264,7 +230,6 @@ app.post('/api/user/deposit', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Amount and UTR are required' });
     }
 
-    // --- CHECK IF UTR ALREADY EXISTS ---
     const existingUtr = await Transaction.findOne({ utr });
     if (existingUtr) {
       return res.status(400).json({ 
@@ -272,7 +237,6 @@ app.post('/api/user/deposit', async (req, res) => {
         message: 'This UTR has already been submitted before. Please use a unique UTR.' 
       });
     }
-    // -----------------------------------
 
     const user = await User.findById(decoded.userId);
     if (!user) {
@@ -301,9 +265,6 @@ app.post('/api/user/deposit', async (req, res) => {
   }
 });
 
-// ==========================================
-// PLACE BET ROUTE (WITH LIVE SOCKET BROADCAST)
-// ==========================================
 app.post('/api/user/bet', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -324,11 +285,9 @@ app.post('/api/user/bet', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
-    // Deduct bet amount from user's balance
     user.totalBalance -= Number(amount);
     await user.save();
 
-    // --- UPDATE GLOBAL POOLS & BROADCAST INSTANTLY ---
     if (!global.colorPools) global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
     if (!global.currentRoundBets) global.currentRoundBets = [];
 
@@ -337,7 +296,6 @@ app.post('/api/user/bet', async (req, res) => {
       global.colorPools[normalizedColor] += Number(amount);
     }
 
-    // Store userId and socketId for round settlement and win payouts
     global.currentRoundBets.unshift({
       userId: user._id,
       userCode: user.userCode,
@@ -365,9 +323,6 @@ app.post('/api/user/bet', async (req, res) => {
   }
 });
 
-// ==========================================
-// ADMIN ROUTES & METRICS
-// ==========================================
 app.get('/api/admin/pending-withdrawals', async (req, res) => {
   try {
     const withdrawals = await Transaction.find({ type: 'withdraw', status: 'Pending' })
@@ -389,9 +344,6 @@ app.get('/api/admin/pending-withdrawals', async (req, res) => {
   }
 });
 
-// ==========================================
-// ADMIN TRANSACTION ACTION (APPROVE / REJECT)
-// ==========================================
 app.post('/api/admin/transaction/action', async (req, res) => {
   try {
     const { transactionId, action } = req.body;
@@ -405,7 +357,6 @@ app.post('/api/admin/transaction/action', async (req, res) => {
     tx.status = action;
     await tx.save();
 
-    // 1. IF DEPOSIT IS APPROVED -> CREDIT USER WALLET
     if (action === 'Approved' && tx.type === 'deposit') {
       await User.findByIdAndUpdate(tx.userId, { 
         $inc: { 
@@ -413,17 +364,14 @@ app.post('/api/admin/transaction/action', async (req, res) => {
           depositBalance: tx.amount 
         } 
       });
-      console.log(`🟢 [WALLET CREDITED] Added ₹${tx.amount} to user ID: ${tx.userId}`);
     }
 
-    // 2. IF WITHDRAWAL IS REJECTED -> REFUND USER WALLET
     if (action === 'Rejected' && tx.type === 'withdraw') {
       await User.findByIdAndUpdate(tx.userId, { 
         $inc: { 
           totalBalance: tx.amount 
         } 
       });
-      console.log(`🟡 [WALLET REFUNDED] Refunded ₹${tx.amount} to user ID: ${tx.userId}`);
     }
 
     res.status(200).json({ success: true, message: `Transaction ${action} successfully` });
@@ -488,9 +436,6 @@ app.delete('/api/admin/user/:id', async (req, res) => {
   }
 });
 
-// ==========================================
-// UPI SETTINGS ROUTE (FIXES 404 ERROR)
-// ==========================================
 app.get('/api/settings/upi', async (req, res) => {
   try {
     const setting = await Setting.findOne({ key: 'upi_id' });
@@ -500,9 +445,6 @@ app.get('/api/settings/upi', async (req, res) => {
   }
 });
 
-// ==========================================
-// PENDING DEPOSITS ROUTE (FORMATTED)
-// ==========================================
 app.get('/api/admin/pending-deposits', async (req, res) => {
   try {
     const deposits = await Transaction.find({ type: 'deposit', status: 'Pending' })
@@ -530,5 +472,4 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// EXPORT APP AT THE VERY BOTTOM
 module.exports = app;
