@@ -203,7 +203,7 @@ app.post('/api/admin/settings/upi', async (req, res) => {
 
     await Setting.findOneAndUpdate(
       { key: 'upi_id' },
-      { value: swiftId => upiId },
+      { value: upiId },
       { upsert: true, new: true }
     );
 
