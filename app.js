@@ -268,7 +268,7 @@ app.post('/api/user/bet', async (req, res) => {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const { amount, color } = req.body;
+    const { amount, color, socketId } = req.body;
     if (!amount || !color) {
       return res.status(400).json({ success: false, message: 'Amount and color are required' });
     }
@@ -293,8 +293,11 @@ app.post('/api/user/bet', async (req, res) => {
       global.colorPools[normalizedColor] += Number(amount);
     }
 
+    // Store userId and socketId for round settlement and win payouts
     global.currentRoundBets.unshift({
+      userId: user._id,
       userCode: user.userCode,
+      socketId: socketId || '',
       color: normalizedColor,
       amount: Number(amount),
       time: new Date().toLocaleTimeString()
@@ -306,7 +309,6 @@ app.post('/api/user/bet', async (req, res) => {
         currentRoundBets: global.currentRoundBets
       });
     }
-    // ------------------------------------------------
 
     res.status(200).json({ 
       success: true, 
