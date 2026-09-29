@@ -285,3 +285,77 @@ app.post('/api/user/bet', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error placing bet' });
   }
 });
+// ==========================================
+// MISSING ADMIN API ROUTES (FIXES 404 ERRORS)
+// ==========================================
+
+// 1. Admin Metrics Overview
+app.get('/api/admin/metrics', async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    
+    const approvedDeposits = await Transaction.aggregate([
+      { $match: { type: 'deposit', status: 'Approved' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+
+    const approvedWithdraws = await Transaction.aggregate([
+      { $match: { type: 'withdraw', status: 'Approved' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      totalUsers,
+      totalDeposits: approvedDeposits[0]?.total || 0,
+      totalWithdraws: approvedWithdraws[0]?.total || 0
+    });
+  } catch (err) {
+    console.error("❌ Metrics Error:", err);
+    res.status(500).json({ success: false, message: 'Server error fetching metrics' });
+  }
+});
+
+// 2. Get All Users
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const users = await User.find().select('-password').sort({ _id: -1 });
+    res.status(200).json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error fetching users' });
+  }
+});
+
+// 3. Approve User Registration
+app.post('/api/admin/approve-user/:id', async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(req.params.id, { isApproved: true }, { new: true });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    res.status(200).json({ success: true, message: 'User approved successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error approving user' });
+  }
+});
+
+// 4. Delete User
+app.delete('/api/admin/user/:id', async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    res.status(200).json({ success: true, message: 'User deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error deleting user' });
+  }
+});
+
+// 5. Pending Deposits Route
+app.get('/api/admin/pending-deposits', async (req, res) => {
+  try {
+    const deposits = await Transaction.find({ type: 'deposit', status: 'Pending' })
+      .populate('userId', 'phoneNumber userCode')
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, deposits });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error fetching deposits' });
+  }
+});
