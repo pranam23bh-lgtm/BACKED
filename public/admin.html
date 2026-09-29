@@ -11,6 +11,9 @@
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
     body { font-family: 'Plus Jakarta Sans', sans-serif; background: #030712; color: #f3f4f6; }
     .glass { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-card { background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.07); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
 <body class="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
@@ -42,65 +45,21 @@
     </div>
   </header>
 
-<!-- ========================================== -->
-<!-- ADMIN UPI / PAYMENT SETTING BOX             -->
-<!-- ========================================== -->
-<div class="card p-4 mb-4" style="background: #1e1e2d; color: white; border-radius: 10px;">
-    <h3 style="margin-bottom: 10px;">⚙️ Manage Frontend UPI ID / Message</h3>
-    <p style="color: #a0a0a0; font-size: 14px;">
-        Type any UPI ID, instructions, or special characters below. It will update instantly on the user deposit screen.
+  <!-- ADMIN UPI / PAYMENT SETTING BOX -->
+  <div class="glass p-4 rounded-2xl border border-gray-800 space-y-3">
+    <h3 class="text-sm font-extrabold text-white">⚙️ Manage Frontend UPI ID / Message</h3>
+    <p class="text-gray-400 text-xs">
+      Type any UPI ID, instructions, or special characters below. It will update instantly on the user deposit screen.
     </p>
-    
-    <div style="display: flex; gap: 10px; margin-top: 15px;">
-        <input type="text" id="adminUpiInput" placeholder="e.g., merchant@ybl or custom text" 
-               style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #2a2a3d; color: white;">
-        <button onclick="saveUpiId()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-            Save UPI
-        </button>
+    <div class="flex gap-2">
+      <input type="text" id="adminUpiInput" placeholder="e.g., merchant@ybl or custom text" 
+             class="flex-1 p-2.5 rounded-xl border border-gray-700 bg-gray-950 text-white text-xs">
+      <button onclick="saveUpiId()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition">
+        Save UPI
+      </button>
     </div>
-    <span id="upiSaveStatus" style="color: #28a745; font-size: 13px; margin-top: 8px; display: none;">✅ Saved successfully!</span>
-</div>
-
-<script>
-// 1. Fetch current UPI when admin page loads
-async function loadAdminUpi() {
-    try {
-        const res = await fetch('/api/settings/upi');
-        const data = await res.json();
-        if (data.success) {
-            document.getElementById('adminUpiInput').value = data.upiId;
-        }
-    } catch (err) {
-        console.error("Error loading UPI setting:", err);
-    }
-}
-
-// 2. Save new UPI / Text to backend
-async function saveUpiId() {
-    const upiId = document.getElementById('adminUpiInput').value;
-    try {
-        const res = await fetch('/api/admin/settings/upi', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ upiId })
-        });
-        const data = await res.json();
-        if (data.success) {
-            const status = document.getElementById('upiSaveStatus');
-            status.style.display = 'block';
-            setTimeout(() => { status.style.display = 'none'; }, 3000);
-        } else {
-            alert(data.message || 'Failed to save');
-        }
-    } catch (err) {
-        console.error("Error saving UPI:", err);
-        alert('Server error saving UPI ID');
-    }
-}
-
-// Run loader on startup
-loadAdminUpi();
-</script>
+    <span id="upiSaveStatus" class="text-emerald-400 text-xs font-semibold hidden">✅ Saved successfully!</span>
+  </div>
 
   <!-- METRICS OVERVIEW -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -164,92 +123,79 @@ loadAdminUpi();
     </div>
   </div>
 
-<!-- FORCE OUTCOME CONTROL -->
-<div class="glass-card p-6 rounded-3xl space-y-4 border border-amber-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl bg-gray-900/40">
-  <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
-  
-  <div class="flex items-center justify-between">
-    <h2 class="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2">
-      <div class="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-        <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
-      </div>
-      Force Round Outcome
-    </h2>
-    <span class="text-[10px] text-gray-400 font-medium">Real-time Override</span>
+  <!-- FORCE OUTCOME CONTROL -->
+  <div class="glass-card p-6 rounded-3xl space-y-4 border border-amber-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl bg-gray-900/40">
+    <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
+    
+    <div class="flex items-center justify-between">
+      <h2 class="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+        <div class="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+          <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
+        </div>
+        Force Round Outcome
+      </h2>
+      <span class="text-[10px] text-gray-400 font-medium">Real-time Override</span>
+    </div>
+
+    <div class="grid grid-cols-5 gap-2">
+      <button onclick="setOverride('🧠 SMART')" id="btn-🧠 SMART" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-300 border border-gray-800 transition-all duration-200 hover:border-gray-600 active:scale-95 shadow-lg">🧠 SMART</button>
+      <button onclick="setOverride('SMART')" id="btn-SMART" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-purple-950/60 text-purple-300 border border-purple-600/40 transition-all duration-200 hover:bg-purple-900/60 active:scale-95 shadow-lg shadow-purple-900/20">🧠 SMART</button>
+      <button onclick="setOverride('GREEN')" id="btn-GREEN" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-emerald-950/50 text-emerald-300 border border-emerald-600/30 transition-all duration-200 hover:bg-emerald-900/50 active:scale-95 shadow-lg">GREEN</button>
+      <button onclick="setOverride('WHITE')" id="btn-WHITE" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-200 border border-gray-700/50 transition-all duration-200 hover:bg-gray-800 active:scale-95 shadow-lg">WHITE</button>
+      <button onclick="setOverride('RED')" id="btn-RED" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-rose-950/50 text-rose-300 border border-rose-600/30 transition-all duration-200 hover:bg-rose-900/50 active:scale-95 shadow-lg">RED</button>
+    </div>
+
+    <div class="flex items-center justify-between pt-2 border-t border-gray-800/60 text-xs">
+      <span class="text-gray-400 font-medium">Current Forced Mode:</span>
+      <span id="activeOverrideText" class="font-black text-amber-400 tracking-wider bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20">AUTO</span>
+    </div>
   </div>
 
-  <div class="grid grid-cols-5 gap-2">
-    <button onclick="setOverride('AUTO')" id="btn-AUTO" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-300 border border-gray-800 transition-all duration-200 hover:border-gray-600 active:scale-95 shadow-lg">AUTO</button>
-    <button onclick="setOverride('SMART')" id="btn-SMART" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-purple-950/60 text-purple-300 border border-purple-600/40 transition-all duration-200 hover:bg-purple-900/60 active:scale-95 shadow-lg shadow-purple-900/20">🧠💝 kill</button>
-    <button onclick="setOverride('GREEN')" id="btn-GREEN" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-emerald-950/50 text-emerald-300 border border-emerald-600/30 transition-all duration-200 hover:bg-emerald-900/50 active:scale-95 shadow-lg">GREEN</button>
-    <button onclick="setOverride('WHITE')" id="btn-WHITE" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-200 border border-gray-700/50 transition-all duration-200 hover:bg-gray-800 active:scale-95 shadow-lg">WHITE</button>
-    <button onclick="setOverride('RED')" id="btn-RED" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-rose-950/50 text-rose-300 border border-rose-600/30 transition-all duration-200 hover:bg-rose-900/50 active:scale-95 shadow-lg">RED</button>
+  <!-- USER REGISTRATIONS APPROVAL -->
+  <div class="glass-card p-6 rounded-3xl space-y-4 border border-blue-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl bg-gray-900/40 mt-4">
+    <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
+
+    <div class="flex items-center justify-between">
+      <h2 class="text-xs font-extrabold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+        <div class="w-7 h-7 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
+          <i class="fa-solid fa-users-gear text-xs"></i>
+        </div>
+        User Registration Approvals
+      </h2>
+      <span class="text-[10px] text-gray-400 font-medium">Pending Queue</span>
+    </div>
+
+    <div class="overflow-x-auto no-scrollbar">
+      <table class="w-full text-left text-xs text-gray-300 border-collapse">
+        <thead>
+          <tr class="bg-gray-900/80 text-gray-400 font-bold uppercase text-[10px] tracking-wider border-b border-gray-800">
+            <th class="p-3.5 rounded-l-xl">User ID</th>
+            <th class="p-3.5">Phone Number</th>
+            <th class="p-3.5">Registration IP</th>
+            <th class="p-3.5">Status</th>
+            <th class="p-3.5 rounded-r-xl text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody" class="divide-y divide-gray-800/60 font-medium">
+          <tr>
+            <td colspan="5" class="p-6 text-center text-gray-500 italic">Loading registration queue...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <div class="flex items-center justify-between pt-2 border-t border-gray-800/60 text-xs">
-    <span class="text-gray-400 font-medium">Current Forced Mode:</span>
-    <span id="activeOverrideText" class="font-black text-amber-400 tracking-wider bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20">AUTO</span>
-  </div>
-</div>
+  <script>
+    const socket = io();
 
-<!-- USER REGISTRATIONS APPROVAL -->
-<div class="glass-card p-6 rounded-3xl space-y-4 border border-blue-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl bg-gray-900/40 mt-4">
-  <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
-
-  <div class="flex items-center justify-between">
-    <h2 class="text-xs font-extrabold text-blue-400 uppercase tracking-widest flex items-center gap-2">
-      <div class="w-7 h-7 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-        <i class="fa-solid fa-users-gear text-xs"></i>
-      </div>
-      User Registration Approvals
-    </h2>
-    <span class="text-[10px] text-gray-400 font-medium">Pending Queue</span>
-  </div>
-
-  <div class="overflow-x-auto no-scrollbar">
-    <table class="w-full text-left text-xs text-gray-300 border-collapse">
-      <thead>
-        <tr class="bg-gray-900/80 text-gray-400 font-bold uppercase text-[10px] tracking-wider border-b border-gray-800">
-          <th class="p-3.5 rounded-l-xl">User ID</th>
-          <th class="p-3.5">Phone Number</th>
-          <th class="p-3.5">Registration IP</th>
-          <th class="p-3.5">Status</th>
-          <th class="p-3.5 rounded-r-xl text-right">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="userTableBody" class="divide-y divide-gray-800/60 font-medium">
-        <tr>
-          <td colspan="5" class="p-6 text-center text-gray-500 italic">Loading registration queue...</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<script>
-  const socket = io();
-
-  socket.on('master_tick', (data) => {
-    document.getElementById('adminRoundId').innerText = `#${data.roundId}`;
-    document.getElementById('poolTimer').innerText = `${data.timer}s`;
-    updateOverrideUI(data.adminOverride); 
-  });
-
-  // Example UI update helper for your override state selection
-  function updateOverrideUI(activeMode) {
-    document.getElementById('activeOverrideText').innerText = activeMode;
-    ['AUTO', 'SMART', 'GREEN', 'WHITE', 'RED'].forEach(mode => {
-      const btn = document.getElementById(`btn-${mode}`);
-      if (btn) {
-        if (mode === activeMode) {
-          btn.classList.add('ring-2', 'ring-white', 'scale-105', 'shadow-2xl');
-        } else {
-          btn.classList.remove('ring-2', 'ring-white', 'scale-105', 'shadow-2xl');
-        }
+    // Socket Event: Master Tick & Live Pools Update
+    socket.on('master_tick', (data) => {
+      document.getElementById('adminRoundId').innerText = `#${data.roundId}`;
+      document.getElementById('poolTimer').innerText = `${data.timer || data.timeLeft || 0}s`;
+      
+      if (data.adminOverride) {
+        updateOverrideUI(data.adminOverride);
       }
-    });
-  }
-</script>
 
       // Update Live Pools
       if (data.colorPools) {
@@ -274,8 +220,8 @@ loadAdminUpi();
 
           return `
             <tr class="hover:bg-gray-800/50">
-              <td class="p-3 text-gray-400">${bet.time}</td>
-              <td class="p-3 font-mono font-bold text-amber-400">${bet.userCode}</td>
+              <td class="p-3 text-gray-400">${bet.time || ''}</td>
+              <td class="p-3 font-mono font-bold text-amber-400">${bet.userCode || 'User'}</td>
               <td class="p-3"><span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold ${badge}">${bet.color}</span></td>
               <td class="p-3 font-bold text-emerald-400">₹${bet.amount}</td>
             </tr>
@@ -290,14 +236,50 @@ loadAdminUpi();
 
     function updateOverrideUI(mode) {
       document.getElementById('activeOverrideText').innerText = mode;
-      ['AUTO', 'GREEN', 'WHITE', 'RED'].forEach(m => {
+      ['AUTO', 'SMART', 'GREEN', 'WHITE', 'RED'].forEach(m => {
         const btn = document.getElementById(`btn-${m}`);
         if (btn) {
-          btn.className = m === mode ? 
-            "py-2.5 rounded-xl font-extrabold text-xs bg-emerald-600 text-white" : 
-            "py-2.5 rounded-xl font-extrabold text-xs bg-gray-800 text-gray-300";
+          if (m === mode) {
+            btn.classList.add('ring-2', 'ring-white', 'scale-105', 'shadow-2xl');
+          } else {
+            btn.classList.remove('ring-2', 'ring-white', 'scale-105', 'shadow-2xl');
+          }
         }
       });
+    }
+
+    async function loadAdminUpi() {
+      try {
+        const res = await fetch('/api/settings/upi');
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('adminUpiInput').value = data.upiId || '';
+        }
+      } catch (err) {
+        console.error("Error loading UPI setting:", err);
+      }
+    }
+
+    async function saveUpiId() {
+      const upiId = document.getElementById('adminUpiInput').value;
+      try {
+        const res = await fetch('/api/admin/settings/upi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ upiId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const status = document.getElementById('upiSaveStatus');
+          status.style.display = 'block';
+          setTimeout(() => { status.style.display = 'none'; }, 3000);
+        } else {
+          alert(data.message || 'Failed to save');
+        }
+      } catch (err) {
+        console.error("Error saving UPI:", err);
+        alert('Server error saving UPI ID');
+      }
     }
 
     async function fetchMetrics() {
@@ -321,22 +303,22 @@ loadAdminUpi();
           tbody.innerHTML = '';
           
           if (data.users.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No registered users found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">No registered users found.</td></tr>`;
             return;
           }
 
           data.users.forEach(u => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td class="p-3 font-mono font-bold text-white">${u.userCode}</td>
-              <td class="p-3">${u.phoneNumber}</td>
-              <td class="p-3 text-gray-400 font-mono">${u.registrationIp || 'N/A'}</td>
-              <td class="p-3">
+              <td class="p-3.5 font-mono font-bold text-white">${u.userCode}</td>
+              <td class="p-3.5">${u.phoneNumber}</td>
+              <td class="p-3.5 text-gray-400 font-mono">${u.registrationIp || 'N/A'}</td>
+              <td class="p-3.5">
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold ${u.isApproved ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}">
                   ${u.isApproved ? 'APPROVED' : 'PENDING'}
                 </span>
               </td>
-              <td class="p-3 text-right space-x-2">
+              <td class="p-3.5 text-right space-x-2">
                 ${!u.isApproved ? `<button onclick="approveUser('${u._id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg font-bold text-[10px] transition">Approve</button>` : ''}
                 <button onclick="deleteUser('${u._id}')" class="bg-red-600/80 hover:bg-red-500 text-white px-3 py-1 rounded-lg font-bold text-[10px] transition">Delete</button>
               </td>
@@ -367,6 +349,7 @@ loadAdminUpi();
     }
 
     // Initial load & polling
+    loadAdminUpi();
     fetchMetrics();
     fetchUsers();
     setInterval(() => {
