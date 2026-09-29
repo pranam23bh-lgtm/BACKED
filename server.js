@@ -9,7 +9,7 @@ process.on('unhandledRejection', (reason, promise) => {
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
-const app = require('./app.js');
+const app = require('./app');
 
 const User = mongoose.model('User');
 
@@ -29,7 +29,7 @@ let onlineUsers = 0;
 let timeRemaining = 30;
 let currentOutcome = 'GREEN';
 let gameHistory = ['GREEN', 'RED', 'WHITE', 'GREEN']; 
-let isTransitioning = false; // Prevents timer overlaps and double payouts
+let isTransitioning = false;
 
 io.on('connection', (socket) => {
   onlineUsers++;
@@ -56,18 +56,16 @@ io.on('connection', (socket) => {
 
 // --- GAME LOOP TIMER & SETTLEMENT ---
 setInterval(async () => {
-  if (isTransitioning) return; // Stops the loop from running during result pause
+  if (isTransitioning) return;
 
   timeRemaining--;
 
-  // Lock betting at 10 seconds remaining
   let phase = timeRemaining <= 10 ? 'CLOSED' : 'BETTING';
 
   if (timeRemaining <= 0) {
-    isTransitioning = true; // Lock immediately to prevent double execution
+    isTransitioning = true;
     phase = 'RESULT';
 
-    // 1. DETERMINE WINNING OUTCOME (AUTO, SMART, GREEN, WHITE, RED)
     if (adminOverride === 'SMART') {
       const pools = global.colorPools || { GREEN: 0, RED: 0, WHITE: 0 };
       const totalCollection = (pools.GREEN || 0) + (pools.RED || 0) + (pools.WHITE || 0);
@@ -87,7 +85,6 @@ setInterval(async () => {
         ].sort((a, b) => b.profit - a.profit);
 
         currentOutcome = rankedOutcomes[0].color;
-        console.log(`🧠 [SMART CONTROL] Pools: Green ₹${pools.GREEN}, White ₹${pools.WHITE}, Red ₹${pools.RED} -> Forced Winner: ${currentOutcome} (Max Profit)`);
       }
     } else if (['GREEN', 'WHITE', 'RED'].includes(adminOverride)) {
       currentOutcome = adminOverride;
@@ -96,7 +93,6 @@ setInterval(async () => {
       currentOutcome = colors[Math.floor(Math.random() * colors.length)];
     }
 
-    // 2. Process Payouts & Wins for Active Bets (Runs ONLY ONCE per round now)
     const roundBets = [...global.currentRoundBets];
     global.currentRoundBets = [];
     global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
@@ -135,11 +131,10 @@ setInterval(async () => {
       colorPools: global.colorPools
     });
 
-    // Pause for 3 seconds before starting the next round countdown
     setTimeout(() => {
       currentRoundId++;
       timeRemaining = 30;
-      isTransitioning = false; // Unlock timer ticks for the new round
+      isTransitioning = false;
       phase = 'BETTING';
 
       io.emit('master_tick', {
@@ -161,7 +156,6 @@ setInterval(async () => {
     return;
   }
 
-  // Broadcast live timer tick during normal countdown
   io.emit('master_tick', {
     roundId: currentRoundId,
     timeLeft: timeRemaining,
