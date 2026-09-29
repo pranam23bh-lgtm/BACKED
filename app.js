@@ -136,9 +136,11 @@ app.get('/api/user/profile', async (req, res) => {
   }
 });
 
-// ==========================================
+/// ==========================================
 // WITHDRAWAL & DEPOSIT ROUTES
 // ==========================================
+
+// 1. Submit Withdrawal Request
 app.post('/api/user/withdraw', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -175,6 +177,49 @@ app.post('/api/user/withdraw', async (req, res) => {
   } catch (err) {
     console.error("❌ Withdrawal Server Error:", err);
     res.status(500).json({ success: false, message: 'Server error submitting withdrawal' });
+  }
+});
+
+// 2. Submit Deposit Request (Fixes the 404 Error)
+app.post('/api/user/deposit', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const { amount, utr, method } = req.body;
+    if (!amount || !utr) {
+      return res.status(400).json({ success: false, message: 'Amount and UTR are required' });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const newDeposit = new Transaction({
+      userId: user._id,
+      type: 'deposit',
+      amount: Number(amount),
+      utr,
+      method: method || 'PhonePe',
+      status: 'Pending'
+    });
+
+    await newDeposit.save();
+    console.log(`🟢 [SUCCESS] Deposit of ₹${amount} submitted by user ${user.userCode} with UTR: ${utr}`);
+    
+    res.status(200).json({ 
+      success: true, 
+      message: 'Deposit request submitted successfully. Awaiting admin approval.' 
+    });
+  } catch (err) {
+    console.error("❌ Deposit Server Error:", err);
+    res.status(500).json({ success: false, message: 'Server error submitting deposit' });
   }
 });
 
