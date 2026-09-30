@@ -33,12 +33,13 @@
     </div>
     
     <!-- NAVIGATION TABS -->
-<nav class="flex flex-wrap items-center justify-center gap-1.5 bg-gray-950 p-1.5 rounded-xl border border-gray-800 text-xs font-bold">
-  <a href="/admin.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-chart-pie mr-1.5"></i> Dashboard</a>
-  <a href="/admin-deposits.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-wallet mr-1.5"></i> Deposits</a>
-  <a href="/admin-withdrawals.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-money-bill-transfer mr-1.5"></i> Withdrawals</a>
-  <a href="/admin-settings.html" class="px-3.5 py-2 rounded-lg bg-blue-600 text-white transition"><i class="fa-solid fa-headset mr-1.5"></i> Customer Service & Logo</a>
-</nav>
+    <nav class="flex flex-wrap items-center justify-center gap-1.5 bg-gray-950 p-1.5 rounded-xl border border-gray-800 text-xs font-bold">
+      <a href="/admin.html" class="px-3.5 py-2 rounded-lg bg-blue-600 text-white transition"><i class="fa-solid fa-chart-pie mr-1.5"></i> Dashboard</a>
+      <a href="/admin-deposits.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-wallet mr-1.5"></i> Deposits</a>
+      <a href="/admin-withdrawals.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-money-bill-transfer mr-1.5"></i> Withdrawals</a>
+      <a href="/admin-settings.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-headset mr-1.5"></i> Customer Service & Logo</a>
+      <a href="/admin-referrals.html" class="px-3.5 py-2 rounded-lg text-emerald-400 hover:text-white transition"><i class="fa-solid fa-users mr-1.5"></i> Referrals</a>
+    </nav>
 
     <div class="text-right">
       <div class="text-xs text-gray-400">Server Round ID</div>
@@ -60,6 +61,23 @@
       </button>
     </div>
     <span id="upiSaveStatus" class="text-emerald-400 text-xs font-semibold hidden">✅ Saved successfully!</span>
+  </div>
+
+  <!-- AUTO REGISTRATION APPROVAL SETTING BOX -->
+  <div class="glass p-4 rounded-2xl border border-gray-800 space-y-3">
+    <div class="flex justify-between items-center">
+      <div>
+        <h3 class="text-sm font-extrabold text-white">⚡ Auto Registration Approval</h3>
+        <p class="text-gray-400 text-xs">
+          When active, every newly registered user is automatically approved instantly without needing manual admin approval.
+        </p>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="autoApproveToggle" onchange="toggleAutoApprove()" class="sr-only peer">
+        <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+      </label>
+    </div>
+    <span id="autoApproveStatus" class="text-emerald-400 text-xs font-semibold hidden">✅ Auto-Approval setting updated successfully!</span>
   </div>
 
   <!-- METRICS OVERVIEW -->
@@ -283,6 +301,40 @@
       }
     }
 
+    async function loadAutoApproveSetting() {
+      try {
+        const res = await fetch('/api/admin/settings/auto-approve');
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('autoApproveToggle').checked = !!data.enabled;
+        }
+      } catch (err) {
+        console.error("Error loading auto-approve setting:", err);
+      }
+    }
+
+    async function toggleAutoApprove() {
+      const enabled = document.getElementById('autoApproveToggle').checked;
+      try {
+        const res = await fetch('/api/admin/settings/auto-approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const status = document.getElementById('autoApproveStatus');
+          status.style.display = 'block';
+          setTimeout(() => { status.style.display = 'none'; }, 3000);
+        } else {
+          alert(data.message || 'Failed to update setting');
+        }
+      } catch (err) {
+        console.error("Error updating setting:", err);
+        alert('Server error updating setting');
+      }
+    }
+
     async function fetchMetrics() {
       try {
         const res = await fetch('/api/admin/metrics');
@@ -351,6 +403,7 @@
 
     // Initial load & polling
     loadAdminUpi();
+    loadAutoApproveSetting();
     fetchMetrics();
     fetchUsers();
     setInterval(() => {

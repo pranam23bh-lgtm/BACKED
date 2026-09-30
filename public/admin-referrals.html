@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Referral Management & Pooling</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background-color: #070a12; color: #fff; font-family: system-ui, -apple-system, sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-950 p-6">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-900 border border-gray-800 p-6 rounded-2xl">
+      <div>
+        <h1 class="text-2xl font-extrabold text-emerald-400">👥 Referral Management & Pooling</h1>
+        <p class="text-xs text-gray-400 mt-1">Track member invitations, who referred whom, deposit statuses, and downlines.</p>
+      </div>
+      <div class="flex gap-3">
+        <a href="admin.html" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold px-4 py-2.5 rounded-xl transition text-gray-300">
+          <i class="fa-solid fa-arrow-left mr-1"></i> Back to Dashboard
+        </a>
+      </div>
+    </div>
+
+    <!-- Search / Filter Bar -->
+    <div class="bg-gray-900 border border-gray-800 p-4 rounded-2xl flex items-center gap-4">
+      <div class="relative flex-1">
+        <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+        <input type="text" id="search-input" oninput="filterTable()" placeholder="Search by User ID, Phone Number, or Referrer..." class="w-full bg-gray-950 border border-gray-800 pl-10 pr-4 py-3 rounded-xl text-xs text-white outline-none focus:border-emerald-500">
+      </div>
+      <div id="total-users-count" class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-900 px-4 py-3 rounded-xl font-bold whitespace-nowrap">
+        Loading...
+      </div>
+    </div>
+
+    <!-- Referrals Table Container -->
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-950 text-gray-400 uppercase font-semibold border-b border-gray-800">
+            <tr>
+              <th class="p-4">User ID & Phone</th>
+              <th class="p-4">Referred By (Inviter)</th>
+              <th class="p-4 text-center">Total Invites</th>
+              <th class="p-4 text-center">Deposited / Not Deposited</th>
+              <th class="p-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="referral-table-body" class="divide-y divide-gray-800">
+            <tr>
+              <td colspan="5" class="p-6 text-center text-gray-500">Loading referral metrics...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- DETAILS MODAL -->
+  <div id="details-modal" class="fixed inset-0 bg-black/80 hidden justify-center items-center p-4 z-50">
+    <div class="bg-gray-900 border border-gray-800 w-full max-w-3xl rounded-2xl p-6 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
+      <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+        <div>
+          <h3 id="modal-title" class="text-sm font-bold text-emerald-400">Invited Users Breakdown</h3>
+          <p id="modal-subtitle" class="text-[10px] text-gray-400 mt-0.5">Detailed list of members referred by this user</p>
+        </div>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="overflow-y-auto flex-1">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-950 text-gray-400 uppercase font-semibold sticky top-0">
+            <tr>
+              <th class="p-3">Invitee User ID</th>
+              <th class="p-3">Phone Number</th>
+              <th class="p-3">Registration Date</th>
+              <th class="p-3 text-center">Sub-Invites</th>
+              <th class="p-3 text-center">Deposit Status</th>
+            </tr>
+          </thead>
+          <tbody id="modal-table-body" class="divide-y divide-gray-800">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pt-3 border-t border-gray-800 flex justify-between items-center">
+        <span id="modal-footer-stats" class="text-[11px] text-gray-400">Showing all invited members</span>
+        <button onclick="closeModal()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let globalReferralData = [];
+
+    async function fetchReferrals() {
+      try {
+        const res = await fetch('/api/admin/referrals');
+        const data = await res.json();
+        
+        if (data.success) {
+          globalReferralData = data.referrals;
+          renderTable(globalReferralData);
+        } else {
+          alert('❌ Failed to load referral data.');
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        alert('❌ Connection error loading referral table.');
+      }
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('referral-table-body');
+      document.getElementById('total-users-count').innerText = `${data.length} Total Users Pooled`;
+      
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500">No users found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.map((item, index) => `
+        <tr class="hover:bg-gray-850 transition">
+          <td class="p-4">
+            <div class="font-bold text-white font-mono">${item.userCode}</div>
+            <div class="text-[10px] text-gray-400">${item.phoneNumber}</div>
+          </td>
+          <td class="p-4">
+            ${item.referredBy 
+              ? `<span class="font-mono font-bold text-amber-400">${item.referredBy}</span><div class="text-[10px] text-gray-400">${item.referrerPhone}</div>` 
+              : `<span class="bg-gray-800 text-gray-400 px-2 py-0.5 rounded text-[10px]">Direct Registration</span>`}
+          </td>
+          <td class="p-4 text-center font-bold text-emerald-400 text-sm">${item.totalInvites}</td>
+          <td class="p-4 text-center">
+            <div class="flex justify-center gap-2">
+              <span class="bg-emerald-950/60 text-emerald-400 border border-emerald-900/50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                ${item.depositedCount} Deposited
+              </span>
+              <span class="bg-rose-950/60 text-rose-400 border border-rose-900/50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                ${item.notDepositedCount} Pending
+              </span>
+            </div>
+          </td>
+          <td class="p-4 text-right">
+            <button onclick="openDetails('${item.userCode}')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl transition shadow text-[11px]">
+              <i class="fa-solid fa-eye mr-1"></i> View Invites (${item.totalInvites})
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterTable() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const filtered = globalReferralData.filter(item => 
+        item.userCode.toLowerCase().includes(query) || 
+        item.phoneNumber.includes(query) || 
+        (item.referredBy && item.referredBy.toLowerCase().includes(query)) ||
+        (item.referrerPhone && item.referrerPhone.includes(query))
+      );
+      renderTable(filtered);
+    }
+
+    function openDetails(userCode) {
+      const userObj = globalReferralData.find(u => u.userCode === userCode);
+      if (!userObj) return;
+
+      document.getElementById('modal-title').innerText = `Referral Downline for ${userObj.userCode} (${userObj.phoneNumber})`;
+      document.getElementById('modal-subtitle').innerText = `Total Invites: ${userObj.totalInvites} | Deposited: ${userObj.depositedCount} | Pending Deposit: ${userObj.notDepositedCount}`;
+      document.getElementById('modal-footer-stats').innerText = `Total Members in Downline: ${userObj.invitedUsers.length}`;
+
+      const modalTbody = document.getElementById('modal-table-body');
+      
+      if (userObj.invitedUsers.length === 0) {
+        modalTbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500">This user hasn't invited any members yet.</td></tr>`;
+      } else {
+        modalTbody.innerHTML = userObj.invitedUsers.map(inv => `
+          <tr class="hover:bg-gray-850 transition">
+            <td class="p-3 font-mono font-bold text-emerald-400">
+              ${inv.userCode}
+              <button onclick="openDetails('${inv.userCode}')" class="ml-2 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-0.5 rounded border border-gray-700" title="Inspect this user's downline">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Inspect
+              </button>
+            </td>
+            <td class="p-3 text-gray-300">${inv.phoneNumber}</td>
+            <td class="p-3 text-gray-400 text-[11px]">${new Date(inv.registeredAt).toLocaleString()}</td>
+            <td class="p-3 text-center font-bold text-cyan-400">${inv.subInvitesCount} invites</td>
+            <td class="p-3 text-center">
+              ${inv.hasDeposited 
+                ? '<span class="bg-emerald-950 text-emerald-400 border border-emerald-900 px-2.5 py-1 rounded-full text-[10px] font-bold">Yes (Deposited)</span>' 
+                : '<span class="bg-rose-950 text-rose-400 border border-rose-900/50 px-2.5 py-1 rounded-full text-[10px] font-bold">No Deposit</span>'}
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('details-modal').classList.remove('hidden');
+      document.getElementById('details-modal').classList.add('flex');
+    }
+
+    function closeModal() {
+      document.getElementById('details-modal').classList.add('hidden');
+      document.getElementById('details-modal').classList.remove('flex');
+    }
+
+    // Initialize data fetch
+    fetchReferrals();
+  </script>
+</body>
+</html>

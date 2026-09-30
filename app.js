@@ -80,6 +80,10 @@ app.post('/api/auth/register', async (req, res) => {
       validReferrerCode = referrerUser.userCode;
     }
 
+    // Check if auto-approve setting is enabled by the admin
+    const autoSetting = await Setting.findOne({ key: 'auto_approve_registrations' });
+    const isApproved = autoSetting ? (autoSetting.value === 'true') : false;
+
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     const userCode = `USR-${randomNum}`;
     const salt = await bcrypt.genSalt(10);
@@ -90,7 +94,7 @@ app.post('/api/auth/register', async (req, res) => {
       password: hashedPassword,
       userCode,
       referredBy: validReferrerCode,
-      isApproved: false,
+      isApproved, // Automatically approved if toggle is active in admin panel
       totalBalance: 0,
       depositBalance: 0,
       bonusBalance: 0,
@@ -99,7 +103,11 @@ app.post('/api/auth/register', async (req, res) => {
     });
 
     await newUser.save();
-    res.status(200).json({ success: true, message: 'Account registered successfully. Pending admin approval.', userCode });
+    res.status(200).json({ 
+      success: true, 
+      message: isApproved ? 'Account registered and approved successfully.' : 'Account registered successfully. Pending admin approval.', 
+      userCode 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error during registration.' });
@@ -241,7 +249,7 @@ app.post('/api/user/withdraw', async (req, res) => {
 });
 
 // ==========================================
-// UNIFIED SETTINGS ROUTES (UPI & SUPPORT)
+// SETTINGS & AUTO-APPROVE ROUTES
 // ==========================================
 app.get('/api/settings', async (req, res) => {
   try {
@@ -316,6 +324,32 @@ app.get('/api/settings/upi', async (req, res) => {
     res.status(200).json({ success: true, upiId: setting ? setting.value : 'merchant@ybl' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching UPI ID' });
+  }
+});
+
+// Auto-Approve Toggle Settings Endpoints
+app.get('/api/admin/settings/auto-approve', async (req, res) => {
+  try {
+    const setting = await Setting.findOne({ key: 'auto_approve_registrations' });
+    const enabled = setting ? (setting.value === 'true') : false;
+    res.status(200).json({ success: true, enabled });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error fetching setting' });
+  }
+});
+
+app.post('/api/admin/settings/auto-approve', async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    await Setting.findOneAndUpdate(
+      { key: 'auto_approve_registrations' },
+      { value: enabled ? 'true' : 'false' },
+      { upsert: true, new: true }
+    );
+    res.status(200).json({ success: true, enabled: !!enabled });
+  } catch (err) {
+    console.error("❌ Error updating auto-approve setting:", err);
+    res.status(500).json({ success: false, message: 'Server error updating setting' });
   }
 });
 
@@ -435,6 +469,9 @@ app.post('/api/user/bet', async (req, res) => {
   }
 });
 
+// ==========================================
+// ADMIN ROUTES
+// ==========================================
 app.get('/api/admin/pending-withdrawals', async (req, res) => {
   try {
     const withdrawals = await Transaction.find({ type: 'withdraw', status: 'Pending' })
@@ -571,7 +608,7 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
   }
 });
 
-// Explicit route for your new settings page
+// Explicit route for settings page
 app.get('/admin-settings.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-settings.html'));
 });
