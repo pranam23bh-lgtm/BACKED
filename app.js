@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema({
   phoneNumber: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   userCode: { type: String, required: true, unique: true },
+  referredBy: { type: String, default: '' }, // Stores the referrer's userCode
   isApproved: { type: Boolean, default: false },
   totalBalance: { type: Number, default: 0 },
   depositBalance: { type: Number, default: 0 },
@@ -57,7 +58,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
 // ==========================================
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { phoneNumber, password } = req.body;
+    const { phoneNumber, password, referralCode } = req.body;
     const phoneRegex = /^\d{10}$/;
     if (!phoneRegex.test(phoneNumber)) {
       return res.status(400).json({ success: false, message: 'Phone number must be a real, exact 10-digit number.' });
@@ -69,6 +70,16 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'This phone number is already registered.' });
     }
 
+    // Validate referral code if provided
+    let validReferrerCode = '';
+    if (referralCode) {
+      const referrerUser = await User.findOne({ userCode: referralCode.toUpperCase() });
+      if (!referrerUser) {
+        return res.status(400).json({ success: false, message: 'Invalid referral code entered.' });
+      }
+      validReferrerCode = referrerUser.userCode;
+    }
+
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     const userCode = `USR-${randomNum}`;
     const salt = await bcrypt.genSalt(10);
@@ -78,6 +89,7 @@ app.post('/api/auth/register', async (req, res) => {
       phoneNumber,
       password: hashedPassword,
       userCode,
+      referredBy: validReferrerCode,
       isApproved: false,
       totalBalance: 0,
       depositBalance: 0,
@@ -126,6 +138,7 @@ app.get('/api/user/profile', async (req, res) => {
       success: true,
       phoneNumber: user.phoneNumber,
       userCode: user.userCode,
+      referredBy: user.referredBy,
       totalBalance: user.totalBalance,
       depositBalance: user.depositBalance,
       bonusBalance: user.bonusBalance,
