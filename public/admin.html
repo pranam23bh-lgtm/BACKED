@@ -33,11 +33,12 @@
     </div>
     
     <!-- NAVIGATION TABS -->
-    <nav class="flex items-center gap-2 bg-gray-950 p-1.5 rounded-xl border border-gray-800 text-xs font-bold">
-      <a href="/admin.html" class="px-4 py-2 rounded-lg bg-amber-500 text-gray-950 transition"><i class="fa-solid fa-chart-pie mr-1.5"></i> Dashboard</a>
-      <a href="/admin-deposits.html" class="px-4 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-wallet mr-1.5"></i> Deposits</a>
-      <a href="/admin-withdrawals.html" class="px-4 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-money-bill-transfer mr-1.5"></i> Withdrawals</a>
-    </nav>
+<nav class="flex flex-wrap items-center justify-center gap-1.5 bg-gray-950 p-1.5 rounded-xl border border-gray-800 text-xs font-bold">
+  <a href="/admin.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-chart-pie mr-1.5"></i> Dashboard</a>
+  <a href="/admin-deposits.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-wallet mr-1.5"></i> Deposits</a>
+  <a href="/admin-withdrawals.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-money-bill-transfer mr-1.5"></i> Withdrawals</a>
+  <a href="/admin-settings.html" class="px-3.5 py-2 rounded-lg bg-blue-600 text-white transition"><i class="fa-solid fa-headset mr-1.5"></i> Customer Service & Logo</a>
+</nav>
 
     <div class="text-right">
       <div class="text-xs text-gray-400">Server Round ID</div>
@@ -138,7 +139,7 @@
     </div>
 
     <div class="grid grid-cols-5 gap-2">
-      <button onclick="setOverride('🧠 SMART')" id="btn-🧠 SMART" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-300 border border-gray-800 transition-all duration-200 hover:border-gray-600 active:scale-95 shadow-lg">🧠 SMART</button>
+      <button onclick="setOverride('🧠 SMART')" id="btn-🧠 SMART" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-300 border border-gray-800 transition-all duration-200 hover:border-gray-600 active:scale-95 shadow-lg">Auto</button>
       <button onclick="setOverride('SMART')" id="btn-SMART" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-purple-950/60 text-purple-300 border border-purple-600/40 transition-all duration-200 hover:bg-purple-900/60 active:scale-95 shadow-lg shadow-purple-900/20">🧠 SMART</button>
       <button onclick="setOverride('GREEN')" id="btn-GREEN" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-emerald-950/50 text-emerald-300 border border-emerald-600/30 transition-all duration-200 hover:bg-emerald-900/50 active:scale-95 shadow-lg">GREEN</button>
       <button onclick="setOverride('WHITE')" id="btn-WHITE" class="override-btn py-3 rounded-2xl font-extrabold text-xs bg-gray-900/80 text-gray-200 border border-gray-700/50 transition-all duration-200 hover:bg-gray-800 active:scale-95 shadow-lg">WHITE</button>

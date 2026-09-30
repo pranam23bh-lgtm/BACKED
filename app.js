@@ -37,7 +37,7 @@ const transactionSchema = new mongoose.Schema({
   type: { type: String, enum: ['deposit', 'withdraw'], required: true },
   amount: { type: Number, required: true },
   status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-  utr: { type: String, unique: true, sparse: true }, // <-- ADDED unique and sparse here
+  utr: { type: String, unique: true, sparse: true },
   method: { type: String },
   bankDetails: { type: String },
   createdAt: { type: Date, default: Date.now }
@@ -147,7 +147,6 @@ app.get('/api/user/transactions', async (req, res) => {
 
     const transactions = await Transaction.find({ userId: decoded.userId }).sort({ createdAt: -1 });
     
-    // Hide/Remove UTR for deposits so it doesn't show on the frontend
     const sanitizedTransactions = transactions.map(tx => {
       const t = tx.toObject();
       if (t.type === 'deposit') {
@@ -172,7 +171,6 @@ app.get('/api/user/history', async (req, res) => {
 
     const transactions = await Transaction.find({ userId: decoded.userId }).sort({ createdAt: -1 });
     
-    // Hide/Remove UTR for deposits in history as well
     const sanitizedTransactions = transactions.map(tx => {
       const t = tx.toObject();
       if (t.type === 'deposit') {
@@ -229,6 +227,31 @@ app.post('/api/user/withdraw', async (req, res) => {
   }
 });
 
+// ==========================================
+// UNIFIED SETTINGS ROUTES (UPI & SUPPORT)
+// ==========================================
+app.get('/api/settings', async (req, res) => {
+  try {
+    const settings = await Setting.find({});
+    const settingsObj = {};
+    settings.forEach(s => {
+      settingsObj[s.key] = s.value;
+    });
+
+    res.status(200).json({
+      success: true,
+      customerServiceName: settingsObj.customer_service_name || '24/7 Live Support',
+      telegramLink: settingsObj.telegram_link || 'https://t.me/your_telegram_username',
+      telegramUsername: settingsObj.telegram_username || '',
+      supportLogoUrl: settingsObj.support_logo_url || '',
+      logoUrl: settingsObj.logo_url || ''
+    });
+  } catch (err) {
+    console.error("❌ Error fetching settings:", err);
+    res.status(500).json({ success: false, message: 'Error fetching settings' });
+  }
+});
+
 app.post('/api/admin/settings/upi', async (req, res) => {
   try {
     const { upiId } = req.body;
@@ -247,6 +270,39 @@ app.post('/api/admin/settings/upi', async (req, res) => {
   } catch (err) {
     console.error("❌ Error updating UPI ID:", err);
     res.status(500).json({ success: false, message: 'Server error updating UPI ID' });
+  }
+});
+
+app.post('/api/admin/settings/support', async (req, res) => {
+  try {
+    const { customerServiceName, telegramLink, telegramUsername, supportLogoUrl } = req.body;
+
+    if (customerServiceName !== undefined) {
+      await Setting.findOneAndUpdate({ key: 'customer_service_name' }, { value: customerServiceName }, { upsert: true, new: true });
+    }
+    if (telegramLink !== undefined) {
+      await Setting.findOneAndUpdate({ key: 'telegram_link' }, { value: telegramLink }, { upsert: true, new: true });
+    }
+    if (telegramUsername !== undefined) {
+      await Setting.findOneAndUpdate({ key: 'telegram_username' }, { value: telegramUsername }, { upsert: true, new: true });
+    }
+    if (supportLogoUrl !== undefined) {
+      await Setting.findOneAndUpdate({ key: 'support_logo_url' }, { value: supportLogoUrl }, { upsert: true, new: true });
+    }
+
+    res.status(200).json({ success: true, message: 'Support settings updated successfully' });
+  } catch (err) {
+    console.error("❌ Error updating support settings:", err);
+    res.status(500).json({ success: false, message: 'Server error updating support settings' });
+  }
+});
+
+app.get('/api/settings/upi', async (req, res) => {
+  try {
+    const setting = await Setting.findOne({ key: 'upi_id' });
+    res.status(200).json({ success: true, upiId: setting ? setting.value : 'merchant@ybl' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error fetching UPI ID' });
   }
 });
 
@@ -331,7 +387,6 @@ app.post('/api/user/bet', async (req, res) => {
       global.colorPools[normalizedColor] += Number(amount);
     }
 
-    // ACCUMULATE / MERGE BETS PER USER & COLOR FOR THE ROUND
     let existingBet = global.currentRoundBets.find(
       b => b.userId.toString() === user._id.toString() && b.color === normalizedColor
     );
@@ -480,15 +535,6 @@ app.delete('/api/admin/user/:id', async (req, res) => {
   }
 });
 
-app.get('/api/settings/upi', async (req, res) => {
-  try {
-    const setting = await Setting.findOne({ key: 'upi_id' });
-    res.status(200).json({ success: true, upiId: setting ? setting.value : 'merchant@ybl' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Error fetching UPI ID' });
-  }
-});
-
 app.get('/api/admin/pending-deposits', async (req, res) => {
   try {
     const deposits = await Transaction.find({ type: 'deposit', status: 'Pending' })
@@ -510,6 +556,11 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
     console.error("❌ Error fetching pending deposits:", err);
     res.status(500).json({ success: false, message: 'Server error fetching deposits' });
   }
+});
+
+// Explicit route for your new settings page
+app.get('/admin-settings.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-settings.html'));
 });
 
 app.get('/', (req, res) => {

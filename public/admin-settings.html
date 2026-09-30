@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Service & Logo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #030712; color: #f3f4f6; }
+    .glass { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body class="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
+
+  <!-- TOP BAR & NAVIGATION -->
+  <header class="flex flex-col md:flex-row justify-between items-center bg-gray-900/80 p-4 rounded-2xl border border-gray-800 gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 text-lg font-bold">
+        <i class="fa-solid fa-headset"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-extrabold text-white tracking-wide">CUSTOMER SERVICE & LOGO</h1>
+        <div class="text-xs text-blue-400 font-semibold flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span> Active Branding & Support
+        </div>
+      </div>
+    </div>
+    
+    <!-- NAVIGATION TABS -->
+    <nav class="flex flex-wrap items-center justify-center gap-1.5 bg-gray-950 p-1.5 rounded-xl border border-gray-800 text-xs font-bold">
+      <a href="/admin.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-chart-pie mr-1.5"></i> Dashboard</a>
+      <a href="/admin-deposits.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-wallet mr-1.5"></i> Deposits</a>
+      <a href="/admin-withdrawals.html" class="px-3.5 py-2 rounded-lg text-gray-400 hover:text-white transition"><i class="fa-solid fa-money-bill-transfer mr-1.5"></i> Withdrawals</a>
+      <a href="/admin-settings.html" class="px-3.5 py-2 rounded-lg bg-blue-600 text-white transition"><i class="fa-solid fa-headset mr-1.5"></i> Customer Service & Logo</a>
+    </nav>
+  </header>
+
+  <!-- CUSTOMER SERVICE & LOGO CONFIGURATION -->
+  <div class="glass p-6 rounded-3xl space-y-5 border border-blue-500/30 shadow-xl">
+    <h2 class="text-sm font-extrabold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+      <i class="fa-solid fa-comments"></i> Customer Service & Logo Setup
+    </h2>
+    <p class="text-gray-400 text-xs">
+      Configure your support title name, Telegram support link, and upload your official platform logo photo.
+    </p>
+    
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-300 mb-1">Customer Service Title Name</label>
+        <input type="text" id="adminCustomerServiceName" placeholder="e.g., 24/7 Live Support" 
+               class="w-full p-3 rounded-xl border border-gray-700 bg-gray-950 text-white text-xs">
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-300 mb-1">Customer Service Telegram Link</label>
+        <input type="text" id="adminTelegramLink" placeholder="https://t.me/yourusername" 
+               class="w-full p-3 rounded-xl border border-gray-700 bg-gray-950 text-white text-xs">
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-300 mb-1">Upload Logo Photo</label>
+        <input type="file" id="logoFileInput" accept="image/*" 
+               class="w-full text-xs text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer bg-gray-950 border border-gray-700 rounded-xl">
+      </div>
+
+      <!-- Logo Preview Container -->
+      <div class="flex items-center gap-3 pt-1">
+        <span class="text-xs text-gray-400">Logo Preview:</span>
+        <img id="logoPreview" src="" alt="No Logo Selected" class="w-12 h-12 object-cover rounded-xl border border-gray-700 bg-gray-900">
+      </div>
+
+      <button onclick="saveSupportSettings()" class="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition">
+        Save Customer Service & Logo
+      </button>
+      <div id="supportSaveStatus" class="text-blue-400 text-xs font-semibold text-center hidden">✅ Customer Service & Logo updated successfully!</div>
+    </div>
+  </div>
+
+  <script>
+    let supportLogoBase64 = '';
+
+    // Handle photo file selection and convert to Base64 live preview
+    document.getElementById('logoFileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(uploadEvent) {
+          supportLogoBase64 = uploadEvent.target.result;
+          document.getElementById('logoPreview').src = supportLogoBase64;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('adminCustomerServiceName').value = data.customerServiceName || '';
+          document.getElementById('adminTelegramLink').value = data.telegramLink || '';
+          if (data.supportLogoUrl) {
+            supportLogoBase64 = data.supportLogoUrl;
+            document.getElementById('logoPreview').src = data.supportLogoUrl;
+          }
+        }
+      } catch (err) {
+        console.error("Error loading settings:", err);
+      }
+    }
+
+    async function saveSupportSettings() {
+      const customerServiceName = document.getElementById('adminCustomerServiceName').value;
+      const telegramLink = document.getElementById('adminTelegramLink').value;
+      
+      try {
+        const payload = { customerServiceName, telegramLink };
+        if (supportLogoBase64) {
+          payload.supportLogoUrl = supportLogoBase64;
+        }
+
+        const res = await fetch('/api/admin/settings/support', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          const status = document.getElementById('supportSaveStatus');
+          status.classList.remove('hidden');
+          setTimeout(() => status.classList.add('hidden'), 3000);
+        } else {
+          alert(data.message || 'Failed to save settings');
+        }
+      } catch (err) {
+        alert('Server error saving support settings');
+      }
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>
