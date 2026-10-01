@@ -158,6 +158,51 @@ app.get('/api/user/profile', async (req, res) => {
   }
 });
 
+// ==========================================
+// SET REFERRAL CODE ROUTE
+// ==========================================
+app.post('/api/user/set-referral', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const { referralCode } = req.body;
+    if (!referralCode) {
+      return res.status(400).json({ success: false, message: 'Referral code is required.' });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    // Check if user already has a referrer set
+    if (user.referredBy) {
+      return res.status(400).json({ success: false, message: 'Referral code can only be set once.' });
+    }
+
+    // Prevent user from referring themselves
+    if (user.userCode === referralCode.toUpperCase()) {
+      return res.status(400).json({ success: false, message: 'You cannot use your own referral code.' });
+    }
+
+    // Verify referrer exists
+    const referrerUser = await User.findOne({ userCode: referralCode.toUpperCase() });
+    if (!referrerUser) {
+      return res.status(400).json({ success: false, message: 'Invalid referral code.' });
+    }
+
+    user.referredBy = referrerUser.userCode;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Referral code applied successfully!' });
+  } catch (err) {
+    console.error("❌ Error setting referral code:", err);
+    res.status(500).json({ success: false, message: 'Server error setting referral code.' });
+  }
+});
+
 app.get('/api/user/transactions', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
