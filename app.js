@@ -608,6 +608,73 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
   }
 });
 
+// Admin Referrals Route
+app.get('/api/admin/referrals', async (req, res) => {
+  try {
+    const users = await User.find().select('-password').sort({ _id: -1 });
+    const referralData = [];
+
+    for (const user of users) {
+      let referrerPhone = 'Direct / None';
+      if (user.referredBy) {
+        const refUser = await User.findOne({ userCode: user.referredBy });
+        if (refUser) {
+          referrerPhone = refUser.phoneNumber;
+        }
+      }
+
+      const invitedUsers = await User.find({ referredBy: user.userCode }).sort({ createdAt: -1 });
+
+      let depositedCount = 0;
+      let notDepositedCount = 0;
+      const invitedDetails = [];
+
+      for (const invitee of invitedUsers) {
+        const approvedDeposit = await Transaction.findOne({ 
+          userId: invitee._id, 
+          type: 'deposit', 
+          status: 'Approved' 
+        });
+
+        const hasDeposited = !!approvedDeposit;
+        if (hasDeposited) {
+          depositedCount++;
+        } else {
+          notDepositedCount++;
+        }
+
+        const subInvitesCount = await User.countDocuments({ referredBy: invitee.userCode });
+
+        invitedDetails.push({
+          userId: invitee._id,
+          userCode: invitee.userCode,
+          phoneNumber: invitee.phoneNumber,
+          hasDeposited,
+          registeredAt: invitee.createdAt || invitee._id.getTimestamp(),
+          subInvitesCount
+        });
+      }
+
+      referralData.push({
+        userId: user._id,
+        userCode: user.userCode,
+        phoneNumber: user.phoneNumber,
+        referredBy: user.referredBy || '',
+        referrerPhone: referrerPhone,
+        totalInvites: invitedUsers.length,
+        depositedCount,
+        notDepositedCount,
+        invitedUsers: invitedDetails
+      });
+    }
+
+    res.status(200).json({ success: true, referrals: referralData });
+  } catch (err) {
+    console.error("❌ Error fetching admin referrals:", err);
+    res.status(500).json({ success: false, message: 'Server error fetching referral metrics' });
+  }
+});
+
 // Explicit route for settings page
 app.get('/admin-settings.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-settings.html'));
