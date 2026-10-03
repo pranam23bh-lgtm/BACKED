@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
   phoneNumber: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   userCode: { type: String, required: true, unique: true },
-  referredBy: { type: String, default: '' }, // Stores the referrer's userCode
+  referredBy: { type: String, default: '' },
   isApproved: { type: Boolean, default: false },
   totalBalance: { type: Number, default: 0 },
   depositBalance: { type: Number, default: 0 },
@@ -76,7 +76,6 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'This phone number is already registered.' });
     }
 
-    // Validate referral code if provided
     let validReferrerCode = '';
     if (referralCode) {
       const referrerUser = await User.findOne({ userCode: referralCode.toUpperCase() });
@@ -86,7 +85,6 @@ app.post('/api/auth/register', async (req, res) => {
       validReferrerCode = referrerUser.userCode;
     }
 
-    // Check if auto-approve setting is enabled by the admin
     const autoSetting = await Setting.findOne({ key: 'auto_approve_registrations' });
     const isApproved = autoSetting ? (autoSetting.value === 'true') : false;
 
@@ -100,7 +98,7 @@ app.post('/api/auth/register', async (req, res) => {
       password: hashedPassword,
       userCode,
       referredBy: validReferrerCode,
-      isApproved, // Automatically approved if toggle is active in admin panel
+      isApproved,
       totalBalance: 0,
       depositBalance: 0,
       bonusBalance: 0,
@@ -183,17 +181,14 @@ app.post('/api/user/set-referral', async (req, res) => {
     const user = await User.findById(decoded.userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
-    // Check if user already has a referrer set
     if (user.referredBy) {
       return res.status(400).json({ success: false, message: 'Referral code can only be set once.' });
     }
 
-    // Prevent user from referring themselves
     if (user.userCode === referralCode.toUpperCase()) {
       return res.status(400).json({ success: false, message: 'You cannot use your own referral code.' });
     }
 
-    // Verify referrer exists
     const referrerUser = await User.findOne({ userCode: referralCode.toUpperCase() });
     if (!referrerUser) {
       return res.status(400).json({ success: false, message: 'Invalid referral code.' });
@@ -269,24 +264,51 @@ app.post('/api/user/withdraw', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const { amount, bankDetails } = req.body;
-    if (!amount || !bankDetails) {
-      return res.status(400).json({ success: false, message: 'Amount and destination details are required' });
+    const withdrawAmount = Number(amount);
+    if (!withdrawAmount || withdrawAmount <= 0 || !bankDetails) {
+      return res.status(400).json({ success: false, message: 'Valid amount and destination details are required' });
     }
 
     const user = await User.findById(decoded.userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    if (user.totalBalance < amount) {
+    const totalAvailable = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
+
+    if (totalAvailable < withdrawAmount || Number(user.totalBalance) < withdrawAmount) {
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
-    user.totalBalance -= Number(amount);
+    let remainingToDeduct = withdrawAmount;
+
+    if ((user.winBalance || 0) >= remainingToDeduct) {
+      user.winBalance -= remainingToDeduct;
+      remainingToDeduct = 0;
+    } else {
+      remainingToDeduct -= (user.winBalance || 0);
+      user.winBalance = 0;
+    }
+
+    if (remainingToDeduct > 0) {
+      if ((user.bonusBalance || 0) >= remainingToDeduct) {
+        user.bonusBalance -= remainingToDeduct;
+        remainingToDeduct = 0;
+      } else {
+        remainingToDeduct -= (user.bonusBalance || 0);
+        user.bonusBalance = 0;
+      }
+    }
+
+    if (remainingToDeduct > 0) {
+      user.depositBalance -= remainingToDeduct;
+    }
+
+    user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
     await user.save();
 
     const newWithdrawal = new Transaction({
       userId: decoded.userId,
       type: 'withdraw',
-      amount: Number(amount),
+      amount: withdrawAmount,
       bankDetails,
       status: 'Pending'
     });
@@ -337,7 +359,6 @@ app.post('/api/admin/settings/upi', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log(`🟢 [UPI UPDATED] New Merchant UPI/Text set to: ${upiId}`);
     res.status(200).json({ success: true, message: 'UPI ID updated successfully' });
   } catch (err) {
     console.error("❌ Error updating UPI ID:", err);
@@ -378,7 +399,6 @@ app.get('/api/settings/upi', async (req, res) => {
   }
 });
 
-// Auto-Approve Toggle Settings Endpoints
 app.get('/api/admin/settings/auto-approve', async (req, res) => {
   try {
     const setting = await Setting.findOne({ key: 'auto_approve_registrations' });
@@ -442,8 +462,6 @@ app.post('/api/user/deposit', async (req, res) => {
     });
 
     await newDeposit.save();
-    console.log(`🟢 [SUCCESS] Deposit of ₹${amount} submitted by user ${user.userCode} with UTR: ${utr}`);
-    
     res.status(200).json({ 
       success: true, 
       message: 'Deposit request submitted successfully. Awaiting admin approval.' 
@@ -474,12 +492,10 @@ app.post('/api/user/bet', async (req, res) => {
 
     const totalAvailable = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
     
-    // Strict validation: Prevent betting more than available balance
     if (totalAvailable < betAmount || Number(user.totalBalance) < betAmount) {
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
-    // Deduct bet amount from buckets: Deposit -> Bonus -> Win
     let remainingToDeduct = betAmount;
 
     if (user.depositBalance >= remainingToDeduct) {
@@ -504,10 +520,8 @@ app.post('/api/user/bet', async (req, res) => {
       user.winBalance -= remainingToDeduct;
     }
 
-    // Update authoritative total balance
     user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
 
-    // Save active bet for round settlement (Force String)
     user.activeBets.push({
       roundId: String(roundId),
       color: color.toUpperCase(),
@@ -560,7 +574,7 @@ app.post('/api/user/bet', async (req, res) => {
 });
 
 async function settleRound(roundId, winningColor) {
-  const stringRoundId = String(roundId); // Force string matching
+  const stringRoundId = String(roundId);
   const users = await User.find({ 'activeBets.roundId': stringRoundId });
 
   for (let user of users) {
@@ -579,21 +593,16 @@ async function settleRound(roundId, winningColor) {
     }
 
     if (hasWon) {
-      // RULE 1: IF YOU WIN -> Winnings updated, deposit & bonus wiped to 0
       user.winBalance = Number(user.winBalance || 0) + totalPayout;
       user.depositBalance = 0;
       user.bonusBalance = 0;
     } else {
-      // RULE 2: IF YOU LOSE -> Everything becomes 0
       user.depositBalance = 0;
       user.bonusBalance = 0;
       user.winBalance = 0;
     }
 
-    // Sync total balance accurately
     user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
-
-    // Clear bets for this round
     user.activeBets = user.activeBets.filter(b => b.roundId !== stringRoundId);
 
     await user.save();
@@ -639,21 +648,16 @@ app.post('/api/admin/transaction/action', async (req, res) => {
     tx.status = action;
     await tx.save();
 
-    if (action === 'Approved' && tx.type === 'deposit') {
-      await User.findByIdAndUpdate(tx.userId, { 
-        $inc: { 
-          totalBalance: tx.amount, 
-          depositBalance: tx.amount 
-        } 
-      });
-    }
+    const user = await User.findById(tx.userId);
+    if (user) {
+      if (action === 'Approved' && tx.type === 'deposit') {
+        user.depositBalance = Number(user.depositBalance || 0) + Number(tx.amount);
+      } else if (action === 'Rejected' && tx.type === 'withdraw') {
+        user.depositBalance = Number(user.depositBalance || 0) + Number(tx.amount);
+      }
 
-    if (action === 'Rejected' && tx.type === 'withdraw') {
-      await User.findByIdAndUpdate(tx.userId, { 
-        $inc: { 
-          totalBalance: tx.amount 
-        } 
-      });
+      user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
+      await user.save();
     }
 
     res.status(200).json({ success: true, message: `Transaction ${action} successfully` });
@@ -741,7 +745,6 @@ app.get('/api/admin/pending-deposits', async (req, res) => {
   }
 });
 
-// Admin Referrals Route
 app.get('/api/admin/referrals', async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ _id: -1 });
@@ -808,7 +811,6 @@ app.get('/api/admin/referrals', async (req, res) => {
   }
 });
 
-// Explicit route for settings page
 app.get('/admin-settings.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-settings.html'));
 });
