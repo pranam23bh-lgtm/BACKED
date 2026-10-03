@@ -595,6 +595,9 @@ async function settleRound(roundId, winningColor) {
   }
 }
 
+// Expose settleRound to server.js
+app.settleRound = settleRound;
+
 // ==========================================
 // ADMIN ROUTES
 // ==========================================

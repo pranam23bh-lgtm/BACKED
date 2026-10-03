@@ -97,26 +97,29 @@ setInterval(async () => {
     global.currentRoundBets = [];
     global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
 
+    // Execute robust centralized settlement from app.js
+    if (typeof app.settleRound === 'function') {
+      await app.settleRound(currentRoundId, currentOutcome);
+    }
+
+    // Notify winning users via sockets
     for (const bet of roundBets) {
       if (bet.color === currentOutcome) {
         const multiplier = currentOutcome === 'WHITE' ? 5 : 2;
         const winAmount = bet.amount * multiplier;
 
         try {
-          const updatedUser = await User.findByIdAndUpdate(bet.userId, {
-            $inc: { winBalance: winAmount, totalBalance: winAmount }
-          }, { new: true });
-
-          if (updatedUser && global.io && bet.socketId) {
+          const userDoc = await User.findById(bet.userId);
+          if (userDoc && global.io && bet.socketId) {
             global.io.to(bet.socketId).emit('round_win', {
               roundId: currentRoundId,
               winningColor: currentOutcome,
               winAmount,
-              newBalance: updatedUser.totalBalance
+              newBalance: userDoc.totalBalance
             });
           }
         } catch (err) {
-          console.error("❌ Error crediting win payout:", err);
+          console.error("❌ Error notifying win payout:", err);
         }
       }
     }
