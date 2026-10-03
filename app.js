@@ -59,6 +59,11 @@ const Setting = mongoose.model('Setting', settingsSchema);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
 
+// In-memory concurrency lock to prevent rapid multi-click race conditions
+if (!global.activeBettingUsers) {
+  global.activeBettingUsers = new Set();
+}
+
 // ==========================================
 // AUTH & USER ROUTES
 // ==========================================
@@ -473,13 +478,25 @@ app.post('/api/user/deposit', async (req, res) => {
 });
 
 app.post('/api/user/bet', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+  let decoded;
   try {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
-
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
 
+  // Prevent concurrent multi-click race conditions for the same user
+  if (global.activeBettingUsers.has(decoded.userId)) {
+    return res.status(429).json({ success: false, message: 'Please wait, your previous bet is still processing.' });
+  }
+
+  global.activeBettingUsers.add(decoded.userId);
+
+  try {
     const { amount, color, socketId, roundId } = req.body;
     const betAmount = Number(amount);
 
@@ -492,10 +509,12 @@ app.post('/api/user/bet', async (req, res) => {
 
     const totalAvailable = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
     
+    // Strict validation against over-betting
     if (totalAvailable < betAmount || Number(user.totalBalance) < betAmount) {
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
+    // Deduct bet amount from buckets: Deposit -> Bonus -> Win
     let remainingToDeduct = betAmount;
 
     if (user.depositBalance >= remainingToDeduct) {
@@ -520,6 +539,7 @@ app.post('/api/user/bet', async (req, res) => {
       user.winBalance -= remainingToDeduct;
     }
 
+    // Update authoritative total balance
     user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
 
     user.activeBets.push({
@@ -570,6 +590,8 @@ app.post('/api/user/bet', async (req, res) => {
   } catch (err) {
     console.error("❌ Bet Server Error:", err);
     res.status(500).json({ success: false, message: 'Server error placing bet' });
+  } finally {
+    global.activeBettingUsers.delete(decoded.userId);
   }
 });
 
@@ -578,11 +600,11 @@ async function settleRound(roundId, winningColor) {
   const users = await User.find({ 'activeBets.roundId': stringRoundId });
 
   for (let user of users) {
-    let hasWon = false;
-    let totalPayout = 0;
-
     const roundBets = user.activeBets.filter(b => b.roundId === stringRoundId);
     if (roundBets.length === 0) continue;
+
+    let hasWon = false;
+    let totalPayout = 0;
 
     for (let bet of roundBets) {
       if (bet.color === winningColor) {
@@ -593,16 +615,17 @@ async function settleRound(roundId, winningColor) {
     }
 
     if (hasWon) {
+      // If won, add winnings to winBalance
       user.winBalance = Number(user.winBalance || 0) + totalPayout;
-      user.depositBalance = 0;
-      user.bonusBalance = 0;
     } else {
-      user.depositBalance = 0;
-      user.bonusBalance = 0;
-      user.winBalance = 0;
+      // If lost, do NOT wipe out the remaining wallet! 
+      // The bet amount was already deducted when placed, so remaining balances stay intact.
     }
 
+    // Sync total balance accurately from buckets
     user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
+    
+    // Clear bets for this round
     user.activeBets = user.activeBets.filter(b => b.roundId !== stringRoundId);
 
     await user.save();
