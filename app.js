@@ -51,6 +51,21 @@ const transactionSchema = new mongoose.Schema({
 });
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
+// ==========================================
+// BET HISTORY SCHEMA (NEW)
+// ==========================================
+const betHistorySchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  roundId: { type: String, required: true },
+  color: { type: String, required: true },
+  amount: { type: Number, required: true },
+  status: { type: String, enum: ['Pending', 'Won', 'Lost'], default: 'Pending' },
+  winningColor: { type: String, default: '' },
+  payout: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now }
+});
+const BetHistory = mongoose.model('BetHistory', betHistorySchema);
+
 const settingsSchema = new mongoose.Schema({
   key: { type: String, unique: true },
   value: { type: String }
@@ -59,7 +74,7 @@ const Setting = mongoose.model('Setting', settingsSchema);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_green_light_key_123';
 
-// In-memory concurrency lock to prevent rapid multi-click race conditions
+// In-memory concurrency lock to prevent rapid multi-click race conditions[cite: 5]
 if (!global.activeBettingUsers) {
   global.activeBettingUsers = new Set();
 }
@@ -254,6 +269,25 @@ app.get('/api/user/history', async (req, res) => {
     res.status(200).json({ success: true, transactions: sanitizedTransactions, history: sanitizedTransactions });
   } catch (err) {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+});
+
+// ==========================================
+// GET USER BET HISTORY ROUTE (NEW)
+// ==========================================
+app.get('/api/user/bet-history', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const history = await BetHistory.find({ userId: decoded.userId }).sort({ createdAt: -1 }).limit(50);
+    res.status(200).json({ success: true, betHistory: history });
+  } catch (err) {
+    console.error("❌ Error fetching bet history:", err);
+    res.status(500).json({ success: false, message: 'Server error fetching bet history' });
   }
 });
 
@@ -489,7 +523,7 @@ app.post('/api/user/bet', async (req, res) => {
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 
-  // Prevent concurrent multi-click race conditions for the same user
+  // Prevent concurrent multi-click race conditions for the same user[cite: 5]
   if (global.activeBettingUsers.has(decoded.userId)) {
     return res.status(429).json({ success: false, message: 'Please wait, your previous bet is still processing.' });
   }
@@ -509,12 +543,12 @@ app.post('/api/user/bet', async (req, res) => {
 
     const totalAvailable = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
     
-    // Strict validation against over-betting
+    // Strict validation against over-betting[cite: 5]
     if (totalAvailable < betAmount || Number(user.totalBalance) < betAmount) {
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
-    // Deduct bet amount from buckets: Deposit -> Bonus -> Win
+    // Deduct bet amount from buckets: Deposit -> Bonus -> Win[cite: 5]
     let remainingToDeduct = betAmount;
 
     if (user.depositBalance >= remainingToDeduct) {
@@ -539,7 +573,7 @@ app.post('/api/user/bet', async (req, res) => {
       user.winBalance -= remainingToDeduct;
     }
 
-    // Update authoritative total balance
+    // Update authoritative total balance[cite: 5]
     user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
 
     user.activeBets.push({
@@ -549,6 +583,16 @@ app.post('/api/user/bet', async (req, res) => {
     });
 
     await user.save();
+
+    // Save persistent bet history record
+    const newBetRecord = new BetHistory({
+      userId: user._id,
+      roundId: String(roundId),
+      color: color.toUpperCase(),
+      amount: betAmount,
+      status: 'Pending'
+    });
+    await newBetRecord.save();
 
     if (!global.colorPools) global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
     if (!global.currentRoundBets) global.currentRoundBets = [];
@@ -607,25 +651,31 @@ async function settleRound(roundId, winningColor) {
     let totalPayout = 0;
 
     for (let bet of roundBets) {
-      if (bet.color === winningColor) {
+      const multiplier = (winningColor === 'WHITE') ? 5 : 2;
+      const isWin = (bet.color === winningColor);
+      const payoutAmount = isWin ? Number(bet.amount) * multiplier : 0;
+
+      if (isWin) {
         hasWon = true;
-        let multiplier = (winningColor === 'WHITE') ? 5 : 2;
-        totalPayout += Number(bet.amount) * multiplier;
+        totalPayout += payoutAmount;
       }
+
+      // Update BetHistory record status
+      await BetHistory.findOneAndUpdate(
+        { userId: user._id, roundId: stringRoundId, color: bet.color, status: 'Pending' },
+        { 
+          status: isWin ? 'Won' : 'Lost', 
+          winningColor: winningColor, 
+          payout: payoutAmount 
+        }
+      );
     }
 
     if (hasWon) {
-      // If won, add winnings to winBalance
       user.winBalance = Number(user.winBalance || 0) + totalPayout;
-    } else {
-      // If lost, do NOT wipe out the remaining wallet! 
-      // The bet amount was already deducted when placed, so remaining balances stay intact.
     }
 
-    // Sync total balance accurately from buckets
     user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
-    
-    // Clear bets for this round
     user.activeBets = user.activeBets.filter(b => b.roundId !== stringRoundId);
 
     await user.save();
