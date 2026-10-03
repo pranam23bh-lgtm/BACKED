@@ -463,20 +463,24 @@ app.post('/api/user/bet', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const { amount, color, socketId, roundId } = req.body;
-    if (!amount || !color || !roundId) {
-      return res.status(400).json({ success: false, message: 'Amount, color, and roundId are required' });
+    const betAmount = Number(amount);
+
+    if (!betAmount || betAmount <= 0 || !color || !roundId) {
+      return res.status(400).json({ success: false, message: 'Valid amount, color, and roundId are required' });
     }
 
     const user = await User.findById(decoded.userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const totalAvailable = (user.depositBalance || 0) + (user.bonusBalance || 0) + (user.winBalance || 0);
-    if (totalAvailable < amount || user.totalBalance < amount) {
+    const totalAvailable = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
+    
+    // Strict validation: Prevent betting more than available balance
+    if (totalAvailable < betAmount || Number(user.totalBalance) < betAmount) {
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
     // Deduct bet amount from buckets: Deposit -> Bonus -> Win
-    let remainingToDeduct = Number(amount);
+    let remainingToDeduct = betAmount;
 
     if (user.depositBalance >= remainingToDeduct) {
       user.depositBalance -= remainingToDeduct;
@@ -501,13 +505,13 @@ app.post('/api/user/bet', async (req, res) => {
     }
 
     // Update authoritative total balance
-    user.totalBalance = (user.depositBalance || 0) + (user.bonusBalance || 0) + (user.winBalance || 0);
+    user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
 
-    // Save active bet for round settlement
+    // Save active bet for round settlement (Force String)
     user.activeBets.push({
       roundId: String(roundId),
       color: color.toUpperCase(),
-      amount: Number(amount)
+      amount: betAmount
     });
 
     await user.save();
@@ -517,7 +521,7 @@ app.post('/api/user/bet', async (req, res) => {
 
     const normalizedColor = color.toUpperCase();
     if (global.colorPools[normalizedColor] !== undefined) {
-      global.colorPools[normalizedColor] += Number(amount);
+      global.colorPools[normalizedColor] += betAmount;
     }
 
     let existingBet = global.currentRoundBets.find(
@@ -525,14 +529,14 @@ app.post('/api/user/bet', async (req, res) => {
     );
 
     if (existingBet) {
-      existingBet.amount += Number(amount);
+      existingBet.amount += betAmount;
     } else {
       global.currentRoundBets.unshift({
         userId: user._id,
         userCode: user.userCode,
         socketId: socketId || '',
         color: normalizedColor,
-        amount: Number(amount),
+        amount: betAmount,
         time: new Date().toLocaleTimeString()
       });
     }
@@ -556,26 +560,27 @@ app.post('/api/user/bet', async (req, res) => {
 });
 
 async function settleRound(roundId, winningColor) {
-  const users = await User.find({ 'activeBets.roundId': roundId });
+  const stringRoundId = String(roundId); // Force string matching
+  const users = await User.find({ 'activeBets.roundId': stringRoundId });
 
   for (let user of users) {
     let hasWon = false;
     let totalPayout = 0;
 
-    const roundBets = user.activeBets.filter(b => b.roundId === roundId);
+    const roundBets = user.activeBets.filter(b => b.roundId === stringRoundId);
     if (roundBets.length === 0) continue;
 
     for (let bet of roundBets) {
       if (bet.color === winningColor) {
         hasWon = true;
         let multiplier = (winningColor === 'WHITE') ? 5 : 2;
-        totalPayout += bet.amount * multiplier;
+        totalPayout += Number(bet.amount) * multiplier;
       }
     }
 
     if (hasWon) {
       // RULE 1: IF YOU WIN -> Winnings updated, deposit & bonus wiped to 0
-      user.winBalance = (user.winBalance || 0) + totalPayout;
+      user.winBalance = Number(user.winBalance || 0) + totalPayout;
       user.depositBalance = 0;
       user.bonusBalance = 0;
     } else {
@@ -585,17 +590,16 @@ async function settleRound(roundId, winningColor) {
       user.winBalance = 0;
     }
 
-    // Sync total balance
-    user.totalBalance = (user.depositBalance || 0) + (user.bonusBalance || 0) + (user.winBalance || 0);
+    // Sync total balance accurately
+    user.totalBalance = Number(user.depositBalance || 0) + Number(user.bonusBalance || 0) + Number(user.winBalance || 0);
 
     // Clear bets for this round
-    user.activeBets = user.activeBets.filter(b => b.roundId !== roundId);
+    user.activeBets = user.activeBets.filter(b => b.roundId !== stringRoundId);
 
     await user.save();
   }
 }
 
-// Expose settleRound to server.js
 app.settleRound = settleRound;
 
 // ==========================================

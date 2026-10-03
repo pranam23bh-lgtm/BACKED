@@ -97,16 +97,16 @@ setInterval(async () => {
     global.currentRoundBets = [];
     global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
 
-    // Execute robust centralized settlement from app.js
+    // Execute robust centralized settlement from app.js with String roundId
     if (typeof app.settleRound === 'function') {
-      await app.settleRound(currentRoundId, currentOutcome);
+      await app.settleRound(String(currentRoundId), currentOutcome);
     }
 
     // Notify winning users via sockets
     for (const bet of roundBets) {
       if (bet.color === currentOutcome) {
         const multiplier = currentOutcome === 'WHITE' ? 5 : 2;
-        const winAmount = bet.amount * multiplier;
+        const winAmount = Number(bet.amount) * multiplier;
 
         try {
           const userDoc = await User.findById(bet.userId);
