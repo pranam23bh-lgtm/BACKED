@@ -29,7 +29,13 @@ const userSchema = new mongoose.Schema({
   depositBalance: { type: Number, default: 0 },
   bonusBalance: { type: Number, default: 0 },
   winBalance: { type: Number, default: 0 },
-  registrationIp: { type: String, required: true }
+  registrationIp: { type: String, required: true },
+  activeBets: [{
+    roundId: { type: String, required: true },
+    color: { type: String, required: true },
+    amount: { type: Number, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }]
 });
 const User = mongoose.model('User', userSchema);
 
@@ -456,19 +462,54 @@ app.post('/api/user/bet', async (req, res) => {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const { amount, color, socketId } = req.body;
-    if (!amount || !color) {
-      return res.status(400).json({ success: false, message: 'Amount and color are required' });
+    const { amount, color, socketId, roundId } = req.body;
+    if (!amount || !color || !roundId) {
+      return res.status(400).json({ success: false, message: 'Amount, color, and roundId are required' });
     }
 
     const user = await User.findById(decoded.userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    if (user.totalBalance < amount) {
+    const totalAvailable = (user.depositBalance || 0) + (user.bonusBalance || 0) + (user.winBalance || 0);
+    if (totalAvailable < amount || user.totalBalance < amount) {
       return res.status(400).json({ success: false, message: 'Insufficient balance' });
     }
 
-    user.totalBalance -= Number(amount);
+    // Deduct bet amount from buckets: Deposit -> Bonus -> Win
+    let remainingToDeduct = Number(amount);
+
+    if (user.depositBalance >= remainingToDeduct) {
+      user.depositBalance -= remainingToDeduct;
+      remainingToDeduct = 0;
+    } else {
+      remainingToDeduct -= user.depositBalance;
+      user.depositBalance = 0;
+    }
+
+    if (remainingToDeduct > 0) {
+      if (user.bonusBalance >= remainingToDeduct) {
+        user.bonusBalance -= remainingToDeduct;
+        remainingToDeduct = 0;
+      } else {
+        remainingToDeduct -= user.bonusBalance;
+        user.bonusBalance = 0;
+      }
+    }
+
+    if (remainingToDeduct > 0) {
+      user.winBalance -= remainingToDeduct;
+    }
+
+    // Update authoritative total balance
+    user.totalBalance = (user.depositBalance || 0) + (user.bonusBalance || 0) + (user.winBalance || 0);
+
+    // Save active bet for round settlement
+    user.activeBets.push({
+      roundId: String(roundId),
+      color: color.toUpperCase(),
+      amount: Number(amount)
+    });
+
     await user.save();
 
     if (!global.colorPools) global.colorPools = { GREEN: 0, RED: 0, WHITE: 0 };
@@ -513,6 +554,46 @@ app.post('/api/user/bet', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error placing bet' });
   }
 });
+
+async function settleRound(roundId, winningColor) {
+  const users = await User.find({ 'activeBets.roundId': roundId });
+
+  for (let user of users) {
+    let hasWon = false;
+    let totalPayout = 0;
+
+    const roundBets = user.activeBets.filter(b => b.roundId === roundId);
+    if (roundBets.length === 0) continue;
+
+    for (let bet of roundBets) {
+      if (bet.color === winningColor) {
+        hasWon = true;
+        let multiplier = (winningColor === 'WHITE') ? 5 : 2;
+        totalPayout += bet.amount * multiplier;
+      }
+    }
+
+    if (hasWon) {
+      // RULE 1: IF YOU WIN -> Winnings updated, deposit & bonus wiped to 0
+      user.winBalance = (user.winBalance || 0) + totalPayout;
+      user.depositBalance = 0;
+      user.bonusBalance = 0;
+    } else {
+      // RULE 2: IF YOU LOSE -> Everything becomes 0
+      user.depositBalance = 0;
+      user.bonusBalance = 0;
+      user.winBalance = 0;
+    }
+
+    // Sync total balance
+    user.totalBalance = (user.depositBalance || 0) + (user.bonusBalance || 0) + (user.winBalance || 0);
+
+    // Clear bets for this round
+    user.activeBets = user.activeBets.filter(b => b.roundId !== roundId);
+
+    await user.save();
+  }
+}
 
 // ==========================================
 // ADMIN ROUTES
